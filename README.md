@@ -1,2 +1,2 @@
 # IFT6268-SWAV
-Project for IFT6268
+Project for SIMCLR
