@@ -26,3 +26,4 @@ Project looks at low data and compute regime as well as how it generalize well o
 To be completed
 
 Author: Shannel Gauthier, Marc-Andre Ruel, Yan Cote
+
