@@ -2,7 +2,7 @@
 #SBATCH --time=00:15:00
 #SBATCH --output=%N-%j.out
 #SBATCH --gres=gpu:1
-#SBATCH --mem=1000
+#SBATCH --mem=8000
 #SBATCH --account=def-bengioy
 
 ENVDIR=$SLURM_TMPDIR/env
