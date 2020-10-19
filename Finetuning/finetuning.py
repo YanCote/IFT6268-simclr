@@ -671,6 +671,8 @@ weight_decay = 0.
 
 # Load the base network and set it to non-trainable (for speedup fine-tuning)
 hub_path = 'gs://simclr-checkpoints/simclrv2/finetuned_100pct/r50_1x_sk0/hub/'
+hub_path = './r50_1x_sk0/hub/'
+hub_path = 'D:\\MILA\\IFT6268-simclr\\Finetuning\\r50_1x_sk0\\hub'
 module = hub.Module(hub_path, trainable=False)
 key = module(inputs=x['image'], signature="default", as_dict=True)
 
@@ -716,3 +718,5 @@ for i in range(5):
   pred_text = tf_flowers_labels[pred[i]]
   axes[i].axis('off')
   axes[i].text(256, 128, 'Truth: ' + true_text + '\n' + 'Pred: ' + pred_text)
+
+plt.show()
