@@ -50,6 +50,17 @@ import tensorflow_datasets as tfds
 import matplotlib
 import matplotlib.pyplot as plt
 
+from tensorflow.python.client import device_lib
+
+device_name = [x.name for x in device_lib.list_local_devices() if x.device_type == 'GPU']
+if device_name != []:
+  if device_name[0] == "/device:GPU:0":
+      device_name = "/gpu:0"
+      #print('GPU')
+  else:
+      #print('CPU')
+      device_name = "/cpu:0"
+
 #@title Load class id to label text mapping from big_transfer (hidden)
 # Code snippet credit: https://github.com/google-research/big_transfer
 
@@ -670,9 +681,8 @@ momentum = 0.9
 weight_decay = 0.
 
 # Load the base network and set it to non-trainable (for speedup fine-tuning)
-hub_path = 'gs://simclr-checkpoints/simclrv2/finetuned_100pct/r50_1x_sk0/hub/'
+# hub_path = 'gs://simclr-checkpoints/simclrv2/finetuned_100pct/r50_1x_sk0/hub/'
 hub_path = './r50_1x_sk0/hub/'
-hub_path = 'D:\\MILA\\IFT6268-simclr\\Finetuning\\r50_1x_sk0\\hub'
 module = hub.Module(hub_path, trainable=False)
 key = module(inputs=x['image'], signature="default", as_dict=True)
 

@@ -2,14 +2,6 @@
 ## Exploration Path on SimCLRv2 - Big Self-Supervised Models are Strong Semi-Supervised Learners 
 
 
-<div align="center">
-  <img width="50%" alt="SimCLR Illustration" src="https://1.bp.blogspot.com/--vH4PKpE9Yo/Xo4a2BYervI/AAAAAAAAFpM/vaFDwPXOyAokAC8Xh852DzOgEs22NhbXwCLcBGAsYHQ/s1600/image4.gif">
-</div>
-<div align="center">
-  An illustration of SimCLR (from <a href="https://ai.googleblog.com/2020/04/advancing-self-supervised-and-semi.html">our blog here</a>).
-</div>
-
-
 Original Git Repo: https://github.com/google-research/simclr
 Project Repo: https://github.com/YanCote/IFT6268-simclr
 Pytorch lightning: https://pytorch-lightning.readthedocs.io/en/latest/
@@ -17,13 +9,13 @@ papers
 
 ## Project description
 
-Project looks at low data and compute regime as well as how it generalize well on other dataset.
-### Methodology
-....
+Finetuning on SimCLRv2
 
-## Enviroment setup
+## Environment setup
 
-To be completed
-
-Author: Shannel Gauthier, Marc-Andre Ruel, Yan Cote
-
+conda create --name simclr
+pip install -r requirement.txt
+install google sdk https://cloud.google.com/sdk/docs/downloads-versioned-archives
+gsutil cp -r 'gs://simclr-checkpoints/simclrv2/finetuned_100pct/r50_1x_sk0/hub/'
+checkpoint need to be renamed saved_model.pb tfhub_model.pb and samething for variables
+Install cuda 10.0, cudnn 7.6 ( cudnn-10.0-windows10-x64-v7.6.0.64)
