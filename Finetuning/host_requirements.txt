@@ -1,0 +1,4 @@
+# pip3 install -r requirements.txt --index https://pypi.org/simple
+# python=3.8
+tensorflow-datasets
+tensorflow-hub
