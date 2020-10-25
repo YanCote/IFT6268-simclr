@@ -1,8 +1,17 @@
-# pip3 install -r requirements.txt --index https://pypi.org/simple
-# python=3.7
-tensorflow
-tensorflow-gpu
-tensorflow-datasets
-tensorflow-hub
-#numpy
-#matplotlib
+-f /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/avx2
+-f /cvmfs/soft.computecanada.ca/custom/python/wheelhouse/generic
+absl-py==0.5.0
+astor==0.7.1
+gast==0.2.0
+grpcio==1.17.1
+h5py==2.8.0
+Keras-Applications==1.0.6
+Keras-Preprocessing==1.0.5
+Markdown==2.6.11
+numpy==1.16.0
+protobuf==3.7.0
+six==1.12.0
+tensorboard==1.12.2
+tensorflow-gpu==1.12.0+computecanada
+termcolor==1.1.0
+Werkzeug==0.14.1

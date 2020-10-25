@@ -49,9 +49,27 @@ import tensorflow_datasets as tfds
 
 import matplotlib
 import matplotlib.pyplot as plt
+import yaml
+import argparse
 
 from tensorflow.python.client import device_lib
 
+# Argument Parsing
+
+parser = argparse.ArgumentParser(description='Finetuning on SimClrv2')
+parser.add_argument('--config','-c', default='finetuning.yml', required=False ,
+                   help='yml configuration file')
+args = parser.parse_args()
+
+# Yaml configuration files
+try:
+    with open(args.config) as f:
+        yml_config = yaml.load(f, Loader=yaml.FullLoader)
+except Exception:
+    raise RuntimeError(f"Configuration filw {args.config} do not exist")
+
+
+# Processing device selection
 device_name = [x.name for x in device_lib.list_local_devices() if x.device_type == 'GPU']
 if device_name != []:
   if device_name[0] == "/device:GPU:0":
@@ -61,10 +79,6 @@ if device_name != []:
       #print('CPU')
       device_name = "/cpu:0"
 
-#@title Load class id to label text mapping from big_transfer (hidden)
-# Code snippet credit: https://github.com/google-research/big_transfer
-
-# !wget https://storage.googleapis.com/bit_models/ilsvrc2012_wordnet_lemmas.txt
 
 imagenet_int_to_str = {}
 
@@ -676,13 +690,14 @@ x = tf.data.make_one_shot_iterator(x).get_next()
 
 #@title Load module and construct the computation graph
 
-learning_rate = 0.1
-momentum = 0.9
-weight_decay = 0.
+learning_rate = yml_config['finetuning']['learning_rate']
+momentum = yml_config['finetuning']['momentum']
+weight_decay = yml_config['finetuning']['weight_decay']
 
 # Load the base network and set it to non-trainable (for speedup fine-tuning)
 # hub_path = 'gs://simclr-checkpoints/simclrv2/finetuned_100pct/r50_1x_sk0/hub/'
 hub_path = './r50_1x_sk0/hub/'
+hub_path = yml_config['finetuning']['model_path']
 module = hub.Module(hub_path, trainable=False)
 key = module(inputs=x['image'], signature="default", as_dict=True)
 
@@ -711,7 +726,7 @@ sess.run(tf.global_variables_initializer())
 
 #@title We fine-tune the new *linear layer* for just a few iterations.
 
-total_iterations = 10
+total_iterations = yml_config['finetuning']['epochs']
 
 for it in range(total_iterations):
   _, loss, image, logits, labels = sess.run((train_op, loss_t, x['image'], logits_t, x['label']))
