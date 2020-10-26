@@ -20,7 +20,6 @@ def load_img(path, image_size=(224, 224), num_channels=3, interpolation='bilinea
 def BuildDataSet(
     img_data_path: str,
     df:pd.DataFrame, 
-    split_ids: [int],
     config: typing.Dict[typing.AnyStr, typing.Any] = None,
     seed: int = 1337,
     image_size: (int, int) = (224, 224),
@@ -48,9 +47,9 @@ def BuildDataSet(
     
 
     # make a list of image paths to use
-    patien_ids = train_df[("Patient ID")].values.tolist()
-    index_imgs = train_df[("Image Index")].values.tolist()
-    labels = train_df[("Finding Labels")].values.tolist()
+    patien_ids = df[("Patient ID")].values.tolist()
+    index_imgs = df[("Image Index")].values.tolist()
+    labels = df[("Finding Labels")].values.tolist()
 
     # Create an interleaved dataset so it's faster. Each dataset is responsible to load it's own compressed image file.
     files = tf.data.Dataset.from_tensor_slices( (patien_ids, index_imgs, labels) )
@@ -70,9 +69,9 @@ class XRayDataSet(tf.data.Dataset):
         seed: int = 1337,
         split: float =  0.70,
     ):
-    """
-    Make sure to use same random seed for training and validation datasets so they respect the data split. 
-    """
+        """
+        Make sure to use same random seed for training and validation datasets so they respect the data split. 
+        """
         df = pd.read_csv(data_frame_path)
 
         # Look at dataframe and split data
@@ -90,7 +89,7 @@ class XRayDataSet(tf.data.Dataset):
             split_ids = np.setdiff1d(range(1, max_id + 1), train_samples, assume_unique=True).tolist()
             dataframe = df[df["Patient ID"].isin(split_ids)]
 
-        return BuildDataSet(img_data_path, dataframe, id_samples, config, seed)
+        return BuildDataSet(img_data_path, dataframe, config, seed)
 
 
 if __name__ == "__main__":

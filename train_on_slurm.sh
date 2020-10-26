@@ -28,7 +28,7 @@ pip freeze
 echo ""
 echo "Calling python train script."
 
-stdbuf -oL python -u -c "import tensorflow as tf;print(tf.reduce_sum(tf.random.normal([1000, 1000])))"
+stdbuf -oL python -u test.py
 echo "testing done!!!!!!"
 
 mkdir ~/IFT6268-simclr/slurm_out
