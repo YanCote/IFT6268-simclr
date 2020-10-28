@@ -71,14 +71,18 @@ except Exception:
 
 # Processing device selection
 device_name = [x.name for x in device_lib.list_local_devices() if x.device_type == 'GPU']
-if device_name != []:
-  if device_name[0] == "/device:GPU:0":
-      device_name = "/gpu:0"
-      #print('GPU')
-  else:
-      #print('CPU')
-      device_name = "/cpu:0"
+# if device_name != []:
+#   if device_name[0] == "/device:GPU:0":
+#       device_name = "/gpu:0"
+#       #print('GPU')
+#   else:
+#       #print('CPU')
+#       device_name = "/cpu:0"
 
+if tf.config.list_physical_devices('gpu'):
+  strategy = tf.distribute.CentralStorageStrategy()
+else:  # use default strategy
+  strategy = tf.distribute.get_strategy() 
 
 imagenet_int_to_str = {}
 
@@ -671,77 +675,79 @@ class LARSOptimizer(tf.train.Optimizer):
           return False
     return True
 
-#@title Load tensorflow datasets: we use tensorflow flower dataset as an example
+with strategy.scope():
 
-batch_size = yml_config['finetuning']['batch']
-dataset_name = 'tf_flowers'
+  #@title Load tensorflow datasets: we use tensorflow flower dataset as an example
 
-yml_config['dataset']['flower_ts_data_path']
-tfds_dataset, tfds_info = tfds.load(dataset_name, split='train', with_info=True, download=False,data_dir=yml_config['dataset']['flower_ts_data_path'])
-num_images = tfds_info.splits['train'].num_examples
-num_classes = tfds_info.features['label'].num_classes
+  batch_size = yml_config['finetuning']['batch']
+  dataset_name = 'tf_flowers'
 
-def _preprocess(x):
-  x['image'] = preprocess_image(
-      x['image'], 224, 224, is_training=False, color_distort=False)
-  return x
-x = tfds_dataset.map(_preprocess).batch(batch_size)
-x = tf.data.make_one_shot_iterator(x).get_next()
+  yml_config['dataset']['flower_ts_data_path']
+  tfds_dataset, tfds_info = tfds.load(dataset_name, split='train', with_info=True, download=False,data_dir=yml_config['dataset']['flower_ts_data_path'])
+  num_images = tfds_info.splits['train'].num_examples
+  num_classes = tfds_info.features['label'].num_classes
 
-#@title Load module and construct the computation graph
+  def _preprocess(x):
+    x['image'] = preprocess_image(
+        x['image'], 224, 224, is_training=False, color_distort=False)
+    return x
+  x = tfds_dataset.map(_preprocess).batch(batch_size)
+  x = tf.data.make_one_shot_iterator(x).get_next()
 
-learning_rate = yml_config['finetuning']['learning_rate']
-momentum = yml_config['finetuning']['momentum']
-weight_decay = yml_config['finetuning']['weight_decay']
+  #@title Load module and construct the computation graph
 
-# Load the base network and set it to non-trainable (for speedup fine-tuning)
-# hub_path = 'gs://simclr-checkpoints/simclrv2/finetuned_100pct/r50_1x_sk0/hub/'
-hub_path = './r50_1x_sk0/hub/'
-hub_path = yml_config['finetuning']['model_path']
-module = hub.Module(hub_path, trainable=False)
-key = module(inputs=x['image'], signature="default", as_dict=True)
+  learning_rate = yml_config['finetuning']['learning_rate']
+  momentum = yml_config['finetuning']['momentum']
+  weight_decay = yml_config['finetuning']['weight_decay']
 
-# Attach a trainable linear layer to adapt for the new task.
-with tf.variable_scope('head_supervised_new', reuse=tf.AUTO_REUSE):
-  logits_t = tf.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
-loss_t = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
-    labels=tf.one_hot(x['label'], num_classes), logits=logits_t))
+  # Load the base network and set it to non-trainable (for speedup fine-tuning)
+  # hub_path = 'gs://simclr-checkpoints/simclrv2/finetuned_100pct/r50_1x_sk0/hub/'
+  hub_path = './r50_1x_sk0/hub/'
+  hub_path = yml_config['finetuning']['model_path']
+  module = hub.Module(hub_path, trainable=False)
+  key = module(inputs=x['image'], signature="default", as_dict=True)
 
-# Setup optimizer and training op.
-optimizer = LARSOptimizer(
-    learning_rate,
-    momentum=momentum,
-    weight_decay=weight_decay,
-    exclude_from_weight_decay=['batch_normalization', 'bias', 'head_supervised'])
-variables_to_train = tf.trainable_variables() 
-train_op = optimizer.minimize(
-    loss_t, global_step=tf.train.get_or_create_global_step(),
-    var_list=variables_to_train)
+  # Attach a trainable linear layer to adapt for the new task.
+  with tf.variable_scope('head_supervised_new', reuse=tf.AUTO_REUSE):
+    logits_t = tf.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
+  loss_t = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
+      labels=tf.one_hot(x['label'], num_classes), logits=logits_t))
 
-print('Variables to train:', variables_to_train)
-key # The accessible tensor in the return dictionary
+  # Setup optimizer and training op.
+  optimizer = LARSOptimizer(
+      learning_rate,
+      momentum=momentum,
+      weight_decay=weight_decay,
+      exclude_from_weight_decay=['batch_normalization', 'bias', 'head_supervised'])
+  variables_to_train = tf.trainable_variables() 
+  train_op = optimizer.minimize(
+      loss_t, global_step=tf.train.get_or_create_global_step(),
+      var_list=variables_to_train)
 
-sess = tf.Session()
-sess.run(tf.global_variables_initializer())
+  print('Variables to train:', variables_to_train)
+  key # The accessible tensor in the return dictionary
 
-#@title We fine-tune the new *linear layer* for just a few iterations.
+  sess = tf.Session()
+  sess.run(tf.global_variables_initializer())
 
-total_iterations = yml_config['finetuning']['epochs']
+  #@title We fine-tune the new *linear layer* for just a few iterations.
 
-for it in range(total_iterations):
-  _, loss, image, logits, labels = sess.run((train_op, loss_t, x['image'], logits_t, x['label']))
-  pred = logits.argmax(-1)
-  correct = np.sum(pred == labels)
-  total = labels.size
-  print("[Iter {}] Loss: {} Top 1: {}".format(it+1, loss, correct/float(total)))
+  total_iterations = yml_config['finetuning']['epochs']
 
-#@title Plot the images and predictions
-fig, axes = plt.subplots(5, 1, figsize=(15, 15))
-for i in range(5):
-  axes[i].imshow(image[i])
-  true_text = tf_flowers_labels[labels[i]]
-  pred_text = tf_flowers_labels[pred[i]]
-  axes[i].axis('off')
-  axes[i].text(256, 128, 'Truth: ' + true_text + '\n' + 'Pred: ' + pred_text)
+  for it in range(total_iterations):
+    _, loss, image, logits, labels = sess.run((train_op, loss_t, x['image'], logits_t, x['label']))
+    pred = logits.argmax(-1)
+    correct = np.sum(pred == labels)
+    total = labels.size
+    print("[Iter {}] Loss: {} Top 1: {}".format(it+1, loss, correct/float(total)))
 
-plt.show()
+  #@title Plot the images and predictions
+  fig, axes = plt.subplots(5, 1, figsize=(15, 15))
+  for i in range(5):
+    axes[i].imshow(image[i])
+    true_text = tf_flowers_labels[labels[i]]
+    pred_text = tf_flowers_labels[pred[i]]
+    axes[i].axis('off')
+    axes[i].text(256, 128, 'Truth: ' + true_text + '\n' + 'Pred: ' + pred_text)
+
+  plt.show()
