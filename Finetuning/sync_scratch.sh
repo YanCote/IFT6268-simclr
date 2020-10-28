@@ -1,0 +1,1 @@
+rsync -avx ~/IFT6268-simclr/ ~/scratch/IFT6268/
