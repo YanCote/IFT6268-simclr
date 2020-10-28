@@ -1,0 +1,27 @@
+
+device_type: ['/cpu:0', '/gpu:0']
+data_src_type: ['imagenet', 'chest xray']
+output_dir: 'output'
+
+dataset:
+  flower_ts_data_path : "/home/yancote1/scratch/"
+
+# pretraining:
+#   epochs: 15
+#   batch: 64
+#   model_path : ''
+#   learning_rate:  0.1
+#   momentum:  0.9
+#   weight_decay:  0.1
+
+finetuning:
+  epochs: 20
+  batch: 64
+  model_path: '/home/yancote1//scratch/r50_1x_sk0/hub/'
+  learning_rate:  0.1
+  momentum:  0.9
+  weight_decay:  0.1
+
+# distillation:
+#   epochs: 15
+#   model_path: ' '

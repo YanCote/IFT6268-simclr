@@ -1,0 +1,8 @@
+cop
+# python=3.7
+tensorflow
+tensorflow-datasets
+tensorflow-hub
+numpy
+matplotlib
+pyYAML
