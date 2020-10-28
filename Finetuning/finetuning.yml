@@ -4,7 +4,8 @@ data_src_type: ['imagenet', 'chest xray']
 output_dir: 'output'
 
 dataset:
-  flower_ts_data_path : "/home/yancote1/scratch/"
+    flower_ts_data_path : "/home/yancote1/scratch/"
+    chest_xray : "H:/data/chest-xray"
 
 # pretraining:
 #   epochs: 15
@@ -15,12 +16,14 @@ dataset:
 #   weight_decay:  0.1
 
 finetuning:
-  epochs: 20
-  batch: 64
-  model_path: '/home/yancote1//scratch/r50_1x_sk0/hub/'
-  learning_rate:  0.1
-  momentum:  0.9
-  weight_decay:  0.1
+    epochs: 20
+    batch: 64
+    model_path: '/home/yancote1/scratch/r50_1x_sk0/hub/'
+    learning_rate:  0.1
+    momentum:  0.9
+    weight_decay:  0.1
+
+    buffer_size: 256
 
 # distillation:
 #   epochs: 15

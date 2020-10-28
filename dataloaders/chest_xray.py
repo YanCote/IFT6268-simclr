@@ -38,13 +38,11 @@ def BuildDataSet(
 
             # TODO: onehot encodings
             one_hot_labels = tf.constant([1.0, 0.0])
-            yield (image_data, one_hot_labels)
+            yield {'image': image_data, 'label':one_hot_labels}
 
 
     def wrap_generator(id, img_idx, labels):
-        return tf.data.Dataset.from_generator(_dataset, args=[id, img_idx, labels], output_types=(tf.float64, tf.float64))
-
-    
+        return tf.data.Dataset.from_generator(_dataset, args=[id, img_idx, labels], output_types={'image': tf.float64, 'label': tf.float64})
 
     # make a list of image paths to use
     patien_ids = df[("Patient ID")].values.tolist()
@@ -55,24 +53,23 @@ def BuildDataSet(
     files = tf.data.Dataset.from_tensor_slices( (patien_ids, index_imgs, labels) )
     dataset = files.interleave(wrap_generator, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
-    return dataset
+    # TODO change num classes
+    return dataset, {"num_examples": df.shape[0], "num_classes": 8}
     
 
 class XRayDataSet(tf.data.Dataset):
     def __new__(
         cls,
-        img_data_path: typing.AnyStr,
-        data_frame_path: typing.AnyStr,
+        data_path: typing.AnyStr,
         config: typing.Dict[typing.AnyStr, typing.Any] = None,
         train: bool = True,
-        scratch_dir: str = None,
         seed: int = 1337,
         split: float =  0.70,
     ):
         """
         Make sure to use same random seed for training and validation datasets so they respect the data split. 
         """
-        df = pd.read_csv(data_frame_path)
+        df = pd.read_csv(os.path.join(data_path, "Data_Entry_2017.csv"))
 
         # Look at dataframe and split data
         if train:
@@ -89,6 +86,7 @@ class XRayDataSet(tf.data.Dataset):
             split_ids = np.setdiff1d(range(1, max_id + 1), train_samples, assume_unique=True).tolist()
             dataframe = df[df["Patient ID"].isin(split_ids)]
 
+        img_data_path = os.path.join(data_path, "images-224")
         return BuildDataSet(img_data_path, dataframe, config, seed)
 
 
