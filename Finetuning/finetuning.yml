@@ -3,8 +3,12 @@ device_type: ['/cpu:0', '/gpu:0']
 data_src_type: ['imagenet', 'chest xray']
 output_dir: 'output'
 
+dataset:
+  flower_ts_data_path : "./"
+
 pretraining:
   epochs: 15
+  batch: 64
   model_path : ''
   learning_rate:  0.1
   momentum:  0.9
@@ -12,6 +16,7 @@ pretraining:
 
 finetuning:
   epochs: 5
+  batch: 64
   model_path: './r50_1x_sk0/hub/'
   learning_rate:  0.1
   momentum:  0.9

@@ -673,11 +673,11 @@ class LARSOptimizer(tf.train.Optimizer):
 
 #@title Load tensorflow datasets: we use tensorflow flower dataset as an example
 
-batch_size = 64
+batch_size = yml_config['finetuning']['batch']
 dataset_name = 'tf_flowers'
 
-tfds_dataset, tfds_info = tfds.load(
-    dataset_name, split='train', with_info=True)
+yml_config['dataset']['flower_ts_data_path']
+tfds_dataset, tfds_info = tfds.load(dataset_name, split='train', with_info=True, download=False,data_dir=yml_config['dataset']['flower_ts_data_path'])
 num_images = tfds_info.splits['train'].num_examples
 num_classes = tfds_info.features['label'].num_classes
 
