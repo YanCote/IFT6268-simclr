@@ -69,7 +69,7 @@ try:
     with open(args.config) as f:
         yml_config = yaml.load(f, Loader=yaml.FullLoader)
 except Exception:
-    raise RuntimeError(f"Configuration filw {args.config} do not exist")
+    raise RuntimeError(f"Configuration file {args.config} do not exist")
 
 
 # Processing device selection
@@ -90,7 +90,7 @@ else:  # use default strategy
 
 imagenet_int_to_str = {}
 
-with open('./Finetuning/ilsvrc2012_wordnet_lemmas.txt', 'r') as f:
+with open('./ilsvrc2012_wordnet_lemmas.txt', 'r') as f:
     for i in range(1000):
         row = f.readline()
         row = row.rstrip()
@@ -743,10 +743,17 @@ if __name__ == "__main__":
     key = module(inputs=x['image'], signature="default", as_dict=True)
 
     # Attach a trainable linear layer to adapt for the new task.
-    with tf.variable_scope('head_supervised_new', reuse=tf.AUTO_REUSE):
-        logits_t = tf.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
-    loss_t = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
-        labels=tf.one_hot(x['label'], num_classes), logits=logits_t))
+    if dataset_name == 'tf_flowers':
+        with tf.variable_scope('head_supervised_new', reuse=tf.AUTO_REUSE):
+            logits_t = tf.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
+        loss_t = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
+            labels=tf.one_hot(x['label'], num_classes), logits=logits_t))
+    elif dataset_name == 'chest_xray':
+        with tf.variable_scope('head_supervised_new', reuse=tf.AUTO_REUSE):
+            logits_t = tf.layers.dense(inputs=key['final_avg_pool'], units=1)
+        loss_t = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
+            labels=tf.one_hot(x['label'], num_classes), logits=logits_t))
+
 
     # Setup optimizer and training op.
     optimizer = LARSOptimizer(

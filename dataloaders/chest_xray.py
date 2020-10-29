@@ -9,6 +9,29 @@ import random
 from tensorflow.python.ops import io_ops
 from tensorflow.python.ops import image_ops
 
+XR_LABELS = {
+    b'Atelectasis': 0,
+    b'No Finding': 1,
+    b'Cardiomegaly': 2,
+    b'Consolidation': 3,
+    b'Edema': 4,
+    b'Effusion': 5,
+    b'Emphysema': 6,
+    b'Fibrosis': 7,
+    b'Hernia': 8,
+    b'Infiltration': 9,
+    b'Mass': 10,
+    b'No Finding': 11,
+    b'Nodule': 12,
+    b'Pleural_Thickening': 13,
+    b'Pneumonia' : 14,
+    b'Pneumothorax': 15,
+
+
+}
+
+
+
 def load_img(path, image_size=(224, 224), num_channels=3, interpolation='bilinear'):
     img = io_ops.read_file(path)
     img = image_ops.decode_image(
@@ -35,22 +58,30 @@ def BuildDataSet(
             #pdb.set_trace()
             image_path = os.path.join(img_data_path, img_idx.decode("utf-8") )
             image_data = load_img(image_path, image_size, num_channels)
-
+            print(len(XR_LABELS.keys()))
+            label_1hot = (1+len(XR_LABELS.keys())) *[0]
             # TODO: onehot encodings
-            one_hot_labels = tf.constant([1.0, 0.0])
+            # < YC one hot Encoding first implementation 29/10/2020>
+            for key in XR_LABELS.keys():
+                label_1hot[XR_LABELS[key]] = 1 if key in labels else 0
+            print(labels)
+            one_hot_labels = label_1hot
             yield {'image': image_data, 'label':one_hot_labels}
+
+
+
 
 
     def wrap_generator(id, img_idx, labels):
         return tf.data.Dataset.from_generator(_dataset, args=[id, img_idx, labels], output_types={'image': tf.float64, 'label': tf.float64})
 
     # make a list of image paths to use
-    patien_ids = df[("Patient ID")].values.tolist()
+    patient_ids = df[("Patient ID")].values.tolist()
     index_imgs = df[("Image Index")].values.tolist()
     labels = df[("Finding Labels")].values.tolist()
 
     # Create an interleaved dataset so it's faster. Each dataset is responsible to load it's own compressed image file.
-    files = tf.data.Dataset.from_tensor_slices( (patien_ids, index_imgs, labels) )
+    files = tf.data.Dataset.from_tensor_slices( (patient_ids, index_imgs, labels) )
     dataset = files.interleave(wrap_generator, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
     # TODO change num classes
@@ -96,8 +127,8 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
     use_cache = False
-    data_frame_path = "H:/data/chest-xray/Data_Entry_2017.csv"
-    img_data_path = "H:/data/chest-xray/images-224"
+    # data_frame_path = "./NIH/Data_Entry_2017.csv"
+    data_path = "../NIH"
     config = dict()
     scratch_dir = None
     batch_size = 128
@@ -111,13 +142,13 @@ if __name__ == "__main__":
             .shuffle(buffer_size)
 
     else:
-        train_ds = XRayDataSet(img_data_path, data_frame_path, config=config, scratch_dir=scratch_dir) \
-            .prefetch(tf.data.experimental.AUTOTUNE) \
-            .shuffle(buffer_size)\
-            .batch(batch_size) 
+        train_ds , tfds_info = XRayDataSet(data_path, config=config,train=True) \
+            # .prefetch(tf.data.experimental.AUTOTUNE) \
+            # .shuffle(buffer_size)\
+            # .batch(batch_size)
             
-    for (images, labels) in train_ds:
-        plt.imshow(images[0].numpy().astype("uint8"))
+    for data in train_ds.take(10):
+        plt.imshow(data['image'].numpy().astype("uint8"))
         plt.title("Test")
         plt.axis("off")
         plt.show()
