@@ -150,9 +150,9 @@ if __name__ == "__main__":
             # .shuffle(buffer_size)\
             # .batch(batch_size)
 
-    [x['image'].shape for x in train_ds.take(20)]
+    # [x['image'].shape for x in train_ds.take(20)]
             
-    for data in train_ds.take(100):
+    for data in train_ds.take(20):
         plt.imshow(data['image'].numpy().astype("uint8"))
         plt.title("Test")
         plt.axis("off")

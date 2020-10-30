@@ -705,7 +705,7 @@ if __name__ == "__main__":
     # @title Load tensorflow datasets: we use tensorflow flower dataset as an example
     dataset_name = 'chest_xray'
     dataset_name = 'tf_flowers'
-    # dataset_name = 'chest_xray'
+    dataset_name = 'chest_xray'
 
     if dataset_name == 'tf_flowers':
         train_dataset, tfds_info = tfds.load(dataset_name, split='train', with_info=True,
