@@ -11,26 +11,26 @@ from tensorflow.python.ops import image_ops
 
 XR_LABELS = {
     b'Atelectasis': 0,
-    b'No Finding': 1,
-    b'Cardiomegaly': 2,
-    b'Consolidation': 3,
-    b'Edema': 4,
-    b'Effusion': 5,
-    b'Emphysema': 6,
-    b'Fibrosis': 7,
-    b'Hernia': 8,
-    b'Infiltration': 9,
-    b'Mass': 10,
-    b'No Finding': 11,
-    b'Nodule': 12,
-    b'Pleural_Thickening': 13,
-    b'Pneumonia' : 14,
-    b'Pneumothorax': 15,
-
-
+    b'Cardiomegaly': 1,
+    b'Consolidation': 2,
+    b'Edema': 3,
+    b'Effusion': 4,
+    b'Emphysema': 5,
+    b'Fibrosis': 6,
+    b'Hernia': 7,
+    b'Infiltration': 8,
+    b'Mass': 9,
+    b'No Finding': 10,
+    b'Nodule': 11,
+    b'Pleural_Thickening': 12,
+    b'Pneumonia' : 13,
+    b'Pneumothorax': 14,
 }
 
-
+xray_n_class = len(XR_LABELS.keys())
+verbose = 1
+img_dtype = tf.float32
+# img_dtype = tf.int32
 
 def load_img(path, image_size=(224, 224), num_channels=3, interpolation='bilinear'):
     img = io_ops.read_file(path)
@@ -38,6 +38,8 @@ def load_img(path, image_size=(224, 224), num_channels=3, interpolation='bilinea
         img, channels=num_channels, expand_animations=False)
     img = image_ops.resize_images_v2(img, image_size, method=interpolation)
     img.set_shape((image_size[0], image_size[1], num_channels))
+    tf.image.convert_image_dtype(
+        img, dtype=tf.float32, saturate=False, name=None)
     return img
 
 def BuildDataSet(
@@ -58,14 +60,13 @@ def BuildDataSet(
             #pdb.set_trace()
             image_path = os.path.join(img_data_path, img_idx.decode("utf-8") )
             image_data = load_img(image_path, image_size, num_channels)
-            print(len(XR_LABELS.keys()))
-            label_1hot = (1+len(XR_LABELS.keys())) *[0]
+            one_hot_labels = xray_n_class*[0]
             # TODO: onehot encodings
             # < YC one hot Encoding first implementation 29/10/2020>
             for key in XR_LABELS.keys():
-                label_1hot[XR_LABELS[key]] = 1 if key in labels else 0
-            print(labels)
-            one_hot_labels = label_1hot
+                one_hot_labels[XR_LABELS[key]] = 1 if key in labels else 0
+            if verbose:
+                print(f"{labels} {image_data.shape} {one_hot_labels}")
             yield {'image': image_data, 'label':one_hot_labels}
 
 
@@ -73,7 +74,8 @@ def BuildDataSet(
 
 
     def wrap_generator(id, img_idx, labels):
-        return tf.data.Dataset.from_generator(_dataset, args=[id, img_idx, labels], output_types={'image': tf.float64, 'label': tf.float64})
+        return tf.data.Dataset.from_generator(_dataset, args=[id, img_idx, labels], output_types={'image': tf.float32, 'label': tf.float32},
+                                              output_shapes={'image': tf.TensorShape([224, 224, 3]), 'label': tf.TensorShape([xray_n_class])})
 
     # make a list of image paths to use
     patient_ids = df[("Patient ID")].values.tolist()
@@ -85,7 +87,8 @@ def BuildDataSet(
     dataset = files.interleave(wrap_generator, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
     # TODO change num classes
-    return dataset, {"num_examples": df.shape[0], "num_classes": 8}
+    # < YC use dict's len 29/10/2020>
+    return dataset, {"num_examples": df.shape[0], "num_classes": xray_n_class}
     
 
 class XRayDataSet(tf.data.Dataset):
@@ -146,9 +149,12 @@ if __name__ == "__main__":
             # .prefetch(tf.data.experimental.AUTOTUNE) \
             # .shuffle(buffer_size)\
             # .batch(batch_size)
+
+    [x['image'].shape for x in train_ds.take(20)]
             
-    for data in train_ds.take(10):
+    for data in train_ds.take(100):
         plt.imshow(data['image'].numpy().astype("uint8"))
         plt.title("Test")
         plt.axis("off")
         plt.show()
+        print(data['label'])
