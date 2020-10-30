@@ -69,8 +69,9 @@ try:
     with open(args.config) as f:
         yml_config = yaml.load(f, Loader=yaml.FullLoader)
 except Exception:
-    raise RuntimeError(f"Configuration filw {args.config} do not exist")
+    raise RuntimeError(f"Configuration file {args.config} do not exist")
 
+# tf.compat.v1.enable_eager_execution(config=None, device_policy=None, execution_mode=None)
 
 # Processing device selection
 device_name = [x.name for x in device_lib.list_local_devices()
@@ -90,7 +91,7 @@ else:  # use default strategy
 
 imagenet_int_to_str = {}
 
-with open('./Finetuning/ilsvrc2012_wordnet_lemmas.txt', 'r') as f:
+with open('./ilsvrc2012_wordnet_lemmas.txt', 'r') as f:
     for i in range(1000):
         row = f.readline()
         row = row.rstrip()
@@ -703,6 +704,8 @@ if __name__ == "__main__":
 
     # @title Load tensorflow datasets: we use tensorflow flower dataset as an example
     dataset_name = 'chest_xray'
+    dataset_name = 'tf_flowers'
+    dataset_name = 'chest_xray'
 
     if dataset_name == 'tf_flowers':
         train_dataset, tfds_info = tfds.load(dataset_name, split='train', with_info=True,
@@ -721,12 +724,17 @@ if __name__ == "__main__":
             x['image'], 224, 224, is_training=False, color_distort=False)
         return x
 
+
+    # [x['label'].numpy() for x in train_dataset.take(20)]
+    # [x['image'].shape for x in train_dataset.take(20)]
+
     x = train_dataset \
             .map(_preprocess, #num_parallel_calls=tf.data.experimental.AUTOTUNE, # Not sure if map is optimal or not... 
                     deterministic=False) \
-            .prefetch(tf.data.experimental.AUTOTUNE) \
-            .shuffle(buffer_size)\
             .batch(batch_size)
+            # .prefetch(tf.data.experimental.AUTOTUNE) \
+            # .shuffle(buffer_size)
+
 
     x = tf.data.make_one_shot_iterator(x).get_next() # TODO: this is probably the reson why it's only itterating once over the data
 
@@ -743,10 +751,18 @@ if __name__ == "__main__":
     key = module(inputs=x['image'], signature="default", as_dict=True)
 
     # Attach a trainable linear layer to adapt for the new task.
-    with tf.variable_scope('head_supervised_new', reuse=tf.AUTO_REUSE):
-        logits_t = tf.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
-    loss_t = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
-        labels=tf.one_hot(x['label'], num_classes), logits=logits_t))
+    if dataset_name == 'tf_flowers':
+        with tf.variable_scope('head_supervised_new', reuse=tf.AUTO_REUSE):
+            logits_t = tf.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
+        loss_t = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
+            labels=tf.one_hot(x['label'], num_classes), logits=logits_t))
+    elif dataset_name == 'chest_xray':
+        with tf.variable_scope('head_supervised_new', reuse=tf.AUTO_REUSE):
+            logits_t = tf.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
+        loss_t = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(
+             labels=tf.convert_to_tensor(x['label']), logits=logits_t))
+            #labels=tf.one_hot(x['label'], num_classes), logits=logits_t))
+
 
     # Setup optimizer and training op.
     optimizer = LARSOptimizer(
@@ -768,6 +784,10 @@ if __name__ == "__main__":
     # @title We fine-tune the new *linear layer* for just a few iterations.
     total_iterations = yml_config['finetuning']['epochs']
 
+    print(logits_t.shape)
+    print(x['label'].shape)
+    print(x['image'].shape)
+    print(type(x['image']))
     for it in range(total_iterations):
         _, loss, image, logits, labels = sess.run(
             (train_op, loss_t, x['image'], logits_t, x['label']))
