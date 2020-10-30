@@ -721,14 +721,18 @@ if __name__ == "__main__":
             x['image'], 224, 224, is_training=False, color_distort=False)
         return x
 
-    x = train_dataset \
+    t_dataset = train_dataset \
             .map(_preprocess, #num_parallel_calls=tf.data.experimental.AUTOTUNE, # Not sure if map is optimal or not... 
                     deterministic=False) \
-            .prefetch(tf.data.experimental.AUTOTUNE) \
-            .shuffle(buffer_size)\
-            .batch(batch_size)
+            .batch(batch_size)\
+            .repeat()
+            #.prefetch(tf.data.experimental.AUTOTUNE) \
+            #.shuffle(buffer_size)\
 
-    x = tf.data.make_one_shot_iterator(x).get_next() # TODO: this is probably the reson why it's only itterating once over the data
+
+    t_itr = t_dataset.make_initializable_iterator()
+    x = t_itr.get_next()
+    # create the initialisation operations
 
     # @title Load module and construct the computation graph
     learning_rate = yml_config['finetuning']['learning_rate']
@@ -770,7 +774,7 @@ if __name__ == "__main__":
 
     for it in range(total_iterations):
         _, loss, image, logits, labels = sess.run(
-            (train_op, loss_t, x['image'], logits_t, x['label']))
+            (train_op, loss_t, x_iter.initializer, logits_t, feed_dict={x: }]))
         pred=logits.argmax(-1)
         correct=np.sum(pred == labels)
         total=labels.size
