@@ -10,21 +10,21 @@ from tensorflow.python.ops import io_ops
 from tensorflow.python.ops import image_ops
 
 XR_LABELS = {
-    b'Atelectasis': 0,
-    b'Cardiomegaly': 1,
-    b'Consolidation': 2,
-    b'Edema': 3,
-    b'Effusion': 4,
-    b'Emphysema': 5,
-    b'Fibrosis': 6,
-    b'Hernia': 7,
-    b'Infiltration': 8,
-    b'Mass': 9,
-    b'No Finding': 10,
-    b'Nodule': 11,
-    b'Pleural_Thickening': 12,
-    b'Pneumonia' : 13,
-    b'Pneumothorax': 14,
+    'Atelectasis': 0,
+    'Cardiomegaly': 1,
+    'Consolidation': 2,
+    'Edema': 3,
+    'Effusion': 4,
+    'Emphysema': 5,
+    'Fibrosis': 6,
+    'Hernia': 7,
+    'Infiltration': 8,
+    'Mass': 9,
+    'No Finding': 10,
+    'Nodule': 11,
+    'Pleural_Thickening': 12,
+    'Pneumonia' : 13,
+    'Pneumothorax': 14,
 }
 
 xray_n_class = len(XR_LABELS.keys())
@@ -32,16 +32,19 @@ verbose = 0
 img_dtype = tf.float32
 # img_dtype = tf.int32
 
-def load_img(path, image_size=(224, 224), num_channels=3, interpolation='bilinear'):
+def load_img(path, one_hot_labels):
+    image_size=(224, 224)
+    num_channels=3
+    interpolation='bilinear'
+
+    # Image
     img = io_ops.read_file(path)
-    img = image_ops.decode_image(
+    img = tf.compat.v1.image.decode_image(
         img, channels=num_channels, expand_animations=False)
-    img = image_ops.resize_images_v2(img, image_size, method=interpolation)
+    img = tf.compat.v1.image.resize(img, image_size, method=interpolation)
     img.set_shape((image_size[0], image_size[1], num_channels))
-    # tf.image.convert_image_dtype(
-    #     img, dtype=tf.float32, saturate=False, name=None)
-    print(img.dtype)
-    return img.dtype
+
+    return {'image': img, 'label': one_hot_labels}
 
 def BuildDataSet(
     img_data_path: str,
@@ -53,40 +56,24 @@ def BuildDataSet(
 ):
     # TODO: get config info
 
-    def _dataset(id, img_idx, labels):
-        # you have acces to dataframe here
-        if img_idx is not None and img_idx != "":
-
-            #print(img_idx)
-            #pdb.set_trace()
-            image_path = os.path.join(img_data_path, img_idx.decode("utf-8") )
-            image_data = load_img(image_path, image_size, num_channels)
-            one_hot_labels = xray_n_class*[0]
-            # TODO: onehot encodings
-            # < YC one hot Encoding first implementation 29/10/2020>
-            for key in XR_LABELS.keys():
-                one_hot_labels[XR_LABELS[key]] = 1 if key in labels else 0
-            one_hot_labels = 4
-            if verbose:
-                print(f"{labels} {image_data.shape} {one_hot_labels}")
-            yield {'image': image_data, 'label':one_hot_labels}
-
-
-
-
-
-    def wrap_generator(id, img_idx, labels):
-        return tf.data.Dataset.from_generator(_dataset, args=[id, img_idx, labels], output_types={'image': tf.float32, 'label': tf.int64},
-                                              output_shapes={'image': tf.TensorShape([224, 224, 3]), 'label': tf.TensorShape([xray_n_class])})
-
     # make a list of image paths to use
-    patient_ids = df[("Patient ID")].values.tolist()
     index_imgs = df[("Image Index")].values.tolist()
     labels = df[("Finding Labels")].values.tolist()
+    for i in range(len(index_imgs)):
+        index_imgs[i] = os.path.join(img_data_path, index_imgs[i])
+
+    # Make onehot labels
+    one_hot_labels = xray_n_class*[0]
+    for i in range(len(labels)):
+        for key in XR_LABELS.keys():
+            one_hot_labels[XR_LABELS[key]] = 1 if key in labels[i] else 0
+        labels[i] = tf.cast(one_hot_labels, dtype=tf.float32)
 
     # Create an interleaved dataset so it's faster. Each dataset is responsible to load it's own compressed image file.
-    files = tf.data.Dataset.from_tensor_slices( (patient_ids, index_imgs, labels) )
-    dataset = files.interleave(wrap_generator, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    dataset = tf.data.Dataset.from_tensor_slices( (index_imgs, labels) )
+    #dataset = files.interleave(wrap_generator, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+
+    dataset = dataset.map(load_img)
 
     # TODO change num classes
     # < YC use dict's len 29/10/2020>
@@ -100,7 +87,7 @@ class XRayDataSet(tf.data.Dataset):
         config: typing.Dict[typing.AnyStr, typing.Any] = None,
         train: bool = True,
         seed: int = 1337,
-        split: float =  0.70,
+        split: float =  0.10,
     ):
         """
         Make sure to use same random seed for training and validation datasets so they respect the data split. 
