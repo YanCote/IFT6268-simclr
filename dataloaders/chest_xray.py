@@ -28,7 +28,7 @@ XR_LABELS = {
 }
 
 xray_n_class = len(XR_LABELS.keys())
-verbose = 1
+verbose = 0
 img_dtype = tf.float32
 # img_dtype = tf.int32
 
@@ -38,9 +38,10 @@ def load_img(path, image_size=(224, 224), num_channels=3, interpolation='bilinea
         img, channels=num_channels, expand_animations=False)
     img = image_ops.resize_images_v2(img, image_size, method=interpolation)
     img.set_shape((image_size[0], image_size[1], num_channels))
-    tf.image.convert_image_dtype(
-        img, dtype=tf.float32, saturate=False, name=None)
-    return img
+    # tf.image.convert_image_dtype(
+    #     img, dtype=tf.float32, saturate=False, name=None)
+    print(img.dtype)
+    return img.dtype
 
 def BuildDataSet(
     img_data_path: str,
@@ -65,6 +66,7 @@ def BuildDataSet(
             # < YC one hot Encoding first implementation 29/10/2020>
             for key in XR_LABELS.keys():
                 one_hot_labels[XR_LABELS[key]] = 1 if key in labels else 0
+            one_hot_labels = 4
             if verbose:
                 print(f"{labels} {image_data.shape} {one_hot_labels}")
             yield {'image': image_data, 'label':one_hot_labels}
@@ -74,7 +76,7 @@ def BuildDataSet(
 
 
     def wrap_generator(id, img_idx, labels):
-        return tf.data.Dataset.from_generator(_dataset, args=[id, img_idx, labels], output_types={'image': tf.float32, 'label': tf.float32},
+        return tf.data.Dataset.from_generator(_dataset, args=[id, img_idx, labels], output_types={'image': tf.float32, 'label': tf.int64},
                                               output_shapes={'image': tf.TensorShape([224, 224, 3]), 'label': tf.TensorShape([xray_n_class])})
 
     # make a list of image paths to use
