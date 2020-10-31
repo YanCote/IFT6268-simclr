@@ -45,8 +45,11 @@ if os.path.abspath(".") not in sys.path:
     sys.path.append(os.path.abspath("."))
 
 import dataloaders.chest_xray as chest_xray
+import utils.model_ckpt as model_ckpt
 import argparse
 import yaml
+from datetime import datetime
+from functools import partial
 from tensorflow.python.client import device_lib
 import matplotlib.pyplot as plt
 import matplotlib
@@ -726,16 +729,13 @@ if __name__ == "__main__":
             x['image'], 224, 224, is_training=False, color_distort=False)
         return x
 
-
-    # [x['label'].numpy() for x in train_dataset.take(20)]
-    # [x['image'].shape for x in train_dataset.take(20)]
-
     x_ds = train_dataset \
             .map(_preprocess, #num_parallel_calls=tf.data.experimental.AUTOTUNE, # Not sure if map is optimal or not... 
                     deterministic=False) \
-            .batch(batch_size)
-            # .prefetch(tf.data.experimental.AUTOTUNE) \
-            # .shuffle(buffer_size)
+            .shuffle(buffer_size)\
+            .batch(batch_size)\
+            .prefetch(tf.data.experimental.AUTOTUNE) 
+            
 
 
     x_iter = tf.compat.v1.data.make_one_shot_iterator(x_ds)
@@ -747,6 +747,8 @@ if __name__ == "__main__":
     learning_rate = yml_config['finetuning']['learning_rate']
     momentum = yml_config['finetuning']['momentum']
     weight_decay = yml_config['finetuning']['weight_decay']
+    epoch_save_step = yml_config['finetuning']['epoch_save_step']
+    load_ckpt = yml_config['finetuning'].get('load_ckpt')
 
     # Load the base network and set it to non-trainable (for speedup fine-tuning)
     # hub_path = 'gs://simclr-checkpoints/simclrv2/finetuned_100pct/r50_1x_sk0/hub/'
@@ -784,35 +786,42 @@ if __name__ == "__main__":
     print('Variables to train:', variables_to_train)
     key  # The accessible tensor in the return dictionary
 
+    # Add ops to save and restore all the variables.
     sess = tf.compat.v1.Session()
-    sess.run(tf.compat.v1.global_variables_initializer())
+    ckpt = tf.compat.v1.train.Saver()
+    current_time = datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
+    directory = os.path.join(os.path.abspath('./output'), current_time)
+    is_time_to_save_session = partial(model_ckpt.save_session, epoch_save_step, ckpt, output=directory)
+    if load_ckpt is not None:
+        ckpt.restore(sess, load_ckpt)
+    else:
+        sess.run(tf.compat.v1.global_variables_initializer())
 
     # @title We fine-tune the new *linear layer* for just a few iterations.
     total_iterations = yml_config['finetuning']['epochs']
-
-    print(logits_t.shape)
-    print(x['label'].shape)
-    print(x['image'].shape)
-    print(type(x['image']))
     for it in range(total_iterations):
+        # Init dataset iterator        
         sess.run(x_init)
-        # x = x_iter.get_next()
+
         tot_loss = 0
         for _ in range(round(num_images / batch_size)):
             _, loss, image, logits, labels = sess.run(fetches=(train_op, loss_t, x['image'], logits_t, x['label']))
-            pred=logits.argmax(-1)
-            correct=np.sum(pred == labels)
-            total=labels.size
+            pred = logits.argmax(-1)
+            correct = np.sum(pred == labels)
+            total = labels.size
             tot_loss += loss
             print("[Iter {}] Total Loss: {} Loss: {} Top 1: {}".format(it + 1, tot_loss, loss, correct / float(total)))
         print("[Iter {}] Total Loss: {} Loss: {} Top 1: {}".format(it+1, tot_loss, loss , correct/float(total)))
+
+        # Is it time to save the session?
+        is_time_to_save_session(it, sess)
 
     # @title Plot the images and predictions
     fig, axes=plt.subplots(5, 1, figsize=(15, 15))
     for i in range(5):
         axes[i].imshow(image[i])
-        true_text=tf_flowers_labels[labels[i]]
-        pred_text=tf_flowers_labels[pred[i]]
+        true_text=chest_xray.XR_LABELS[labels[i]]
+        pred_text=chest_xray.XR_LABELS[pred[i]]
         axes[i].axis('off')
         axes[i].text(256, 128, 'Truth: ' + true_text + '\n' + 'Pred: ' + pred_text)
 
