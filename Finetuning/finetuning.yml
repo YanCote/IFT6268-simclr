@@ -24,6 +24,9 @@ finetuning:
     weight_decay:  0.1
 
     buffer_size: 256
+    epoch_save_step: 10
+
+    #load_ckpt: "./output/session_0.ckpt"
 
 # distillation:
 #   epochs: 15
