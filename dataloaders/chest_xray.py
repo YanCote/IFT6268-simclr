@@ -9,13 +9,42 @@ import random
 from tensorflow.python.ops import io_ops
 from tensorflow.python.ops import image_ops
 
-def load_img(path, image_size=(224, 224), num_channels=3, interpolation='bilinear'):
+XR_LABELS = {
+    'Atelectasis': 0,
+    'Cardiomegaly': 1,
+    'Consolidation': 2,
+    'Edema': 3,
+    'Effusion': 4,
+    'Emphysema': 5,
+    'Fibrosis': 6,
+    'Hernia': 7,
+    'Infiltration': 8,
+    'Mass': 9,
+    'No Finding': 10,
+    'Nodule': 11,
+    'Pleural_Thickening': 12,
+    'Pneumonia' : 13,
+    'Pneumothorax': 14,
+}
+
+xray_n_class = len(XR_LABELS.keys())
+verbose = 0
+img_dtype = tf.float32
+# img_dtype = tf.int32
+
+def load_img(path, one_hot_labels):
+    image_size=(224, 224)
+    num_channels=3
+    interpolation='bilinear'
+
+    # Image
     img = io_ops.read_file(path)
-    img = image_ops.decode_image(
+    img = tf.compat.v1.image.decode_image(
         img, channels=num_channels, expand_animations=False)
-    img = image_ops.resize_images_v2(img, image_size, method=interpolation)
+    img = tf.compat.v1.image.resize(img, image_size, method=interpolation)
     img.set_shape((image_size[0], image_size[1], num_channels))
-    return img
+
+    return {'image': img, 'label': one_hot_labels}
 
 def BuildDataSet(
     img_data_path: str,
@@ -27,34 +56,28 @@ def BuildDataSet(
 ):
     # TODO: get config info
 
-    def _dataset(id, img_idx, labels):
-        # you have acces to dataframe here
-        if img_idx is not None and img_idx != "":
-
-            #print(img_idx)
-            #pdb.set_trace()
-            image_path = os.path.join(img_data_path, img_idx.decode("utf-8") )
-            image_data = load_img(image_path, image_size, num_channels)
-
-            # TODO: onehot encodings
-            one_hot_labels = tf.constant([1.0, 0.0])
-            yield {'image': image_data, 'label':one_hot_labels}
-
-
-    def wrap_generator(id, img_idx, labels):
-        return tf.data.Dataset.from_generator(_dataset, args=[id, img_idx, labels], output_types={'image': tf.float64, 'label': tf.float64})
-
     # make a list of image paths to use
-    patien_ids = df[("Patient ID")].values.tolist()
     index_imgs = df[("Image Index")].values.tolist()
     labels = df[("Finding Labels")].values.tolist()
+    for i in range(len(index_imgs)):
+        index_imgs[i] = os.path.join(img_data_path, index_imgs[i])
+
+    # Make onehot labels
+    one_hot_labels = xray_n_class*[0]
+    for i in range(len(labels)):
+        for key in XR_LABELS.keys():
+            one_hot_labels[XR_LABELS[key]] = 1 if key in labels[i] else 0
+        labels[i] = tf.cast(one_hot_labels, dtype=tf.float32)
 
     # Create an interleaved dataset so it's faster. Each dataset is responsible to load it's own compressed image file.
-    files = tf.data.Dataset.from_tensor_slices( (patien_ids, index_imgs, labels) )
-    dataset = files.interleave(wrap_generator, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    dataset = tf.data.Dataset.from_tensor_slices( (index_imgs, labels) )
+    #dataset = files.interleave(wrap_generator, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+
+    dataset = dataset.map(load_img)
 
     # TODO change num classes
-    return dataset, {"num_examples": df.shape[0], "num_classes": 8}
+    # < YC use dict's len 29/10/2020>
+    return dataset, {"num_examples": df.shape[0], "num_classes": xray_n_class}
     
 
 class XRayDataSet(tf.data.Dataset):
@@ -64,7 +87,7 @@ class XRayDataSet(tf.data.Dataset):
         config: typing.Dict[typing.AnyStr, typing.Any] = None,
         train: bool = True,
         seed: int = 1337,
-        split: float =  0.70,
+        split: float =  0.10,
     ):
         """
         Make sure to use same random seed for training and validation datasets so they respect the data split. 
@@ -96,8 +119,8 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
     use_cache = False
-    data_frame_path = "H:/data/chest-xray/Data_Entry_2017.csv"
-    img_data_path = "H:/data/chest-xray/images-224"
+    # data_frame_path = "./NIH/Data_Entry_2017.csv"
+    data_path = "../NIH"
     config = dict()
     scratch_dir = None
     batch_size = 128
@@ -111,13 +134,16 @@ if __name__ == "__main__":
             .shuffle(buffer_size)
 
     else:
-        train_ds = XRayDataSet(img_data_path, data_frame_path, config=config, scratch_dir=scratch_dir) \
-            .prefetch(tf.data.experimental.AUTOTUNE) \
-            .shuffle(buffer_size)\
-            .batch(batch_size) 
+        train_ds , tfds_info = XRayDataSet(data_path, config=config,train=True) \
+            # .prefetch(tf.data.experimental.AUTOTUNE) \
+            # .shuffle(buffer_size)\
+            # .batch(batch_size)
+
+    # [x['image'].shape for x in train_ds.take(20)]
             
-    for (images, labels) in train_ds:
-        plt.imshow(images[0].numpy().astype("uint8"))
+    for data in train_ds.take(20):
+        plt.imshow(data['image'].numpy().astype("uint8"))
         plt.title("Test")
         plt.axis("off")
         plt.show()
+        print(data['label'])

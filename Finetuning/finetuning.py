@@ -45,8 +45,11 @@ if os.path.abspath(".") not in sys.path:
     sys.path.append(os.path.abspath("."))
 
 import dataloaders.chest_xray as chest_xray
+import utils.model_ckpt as model_ckpt
 import argparse
 import yaml
+from datetime import datetime
+from functools import partial
 from tensorflow.python.client import device_lib
 import matplotlib.pyplot as plt
 import matplotlib
@@ -54,8 +57,10 @@ import tensorflow_datasets as tfds
 import tensorflow_hub as hub
 import re
 import numpy as np
-import tensorflow.compat.v1 as tf
-tf.disable_eager_execution()
+import tensorflow as tf
+print(tf.__version__)
+tf.compat.v1.disable_eager_execution()
+# tf.compat.v1.disable_v2_behavior()
 
 
 # Argument Parsing
@@ -69,8 +74,9 @@ try:
     with open(args.config) as f:
         yml_config = yaml.load(f, Loader=yaml.FullLoader)
 except Exception:
-    raise RuntimeError(f"Configuration filw {args.config} do not exist")
+    raise RuntimeError(f"Configuration file {args.config} do not exist")
 
+# tf.compat.v1.enable_eager_execution(config=None, device_policy=None, execution_mode=None)
 
 # Processing device selection
 device_name = [x.name for x in device_lib.list_local_devices()
@@ -107,16 +113,16 @@ CROP_PROPORTION = 0.875  # Standard for ImageNet.
 def random_apply(func, p, x):
     """Randomly apply function func to x with probability p."""
     return tf.cond(
-        tf.less(tf.random_uniform([], minval=0, maxval=1, dtype=tf.float32),
+        pred=tf.less(tf.random.uniform([], minval=0, maxval=1, dtype=tf.float32),
                 tf.cast(p, tf.float32)),
-        lambda: func(x),
-        lambda: x)
+        true_fn=lambda: func(x),
+        false_fn=lambda: x)
 
 
 def random_brightness(image, max_delta, impl='simclrv2'):
     """A multiplicative vs additive change of brightness."""
     if impl == 'simclrv2':
-        factor = tf.random_uniform(
+        factor = tf.random.uniform(
             [], tf.maximum(1.0 - max_delta, 0), 1.0 + max_delta)
         image = image * factor
     elif impl == 'simclrv1':
@@ -165,7 +171,7 @@ def color_jitter_nonrand(image, brightness=0, contrast=0, saturation=0, hue=0):
     Returns:
       The distorted image tensor.
     """
-    with tf.name_scope('distort_color'):
+    with tf.compat.v1.name_scope('distort_color'):
         def apply_transform(i, x, brightness, contrast, saturation, hue):
             """Apply the i-th transformation."""
             if brightness != 0 and i == 0:
@@ -198,7 +204,7 @@ def color_jitter_rand(image, brightness=0, contrast=0, saturation=0, hue=0):
     Returns:
       The distorted image tensor.
     """
-    with tf.name_scope('distort_color'):
+    with tf.compat.v1.name_scope('distort_color'):
         def apply_transform(i, x):
             """Apply the i-th transformation."""
             def brightness_foo():
@@ -225,13 +231,13 @@ def color_jitter_rand(image, brightness=0, contrast=0, saturation=0, hue=0):
                     return x
                 else:
                     return tf.image.random_hue(x, max_delta=hue)
-            x = tf.cond(tf.less(i, 2),
-                        lambda: tf.cond(
-                            tf.less(i, 1), brightness_foo, contrast_foo),
-                        lambda: tf.cond(tf.less(i, 3), saturation_foo, hue_foo))
+            x = tf.cond(pred=tf.less(i, 2),
+                        true_fn=lambda: tf.cond(
+                            pred=tf.less(i, 1), true_fn=brightness_foo, false_fn=contrast_foo),
+                        false_fn=lambda: tf.cond(pred=tf.less(i, 3), true_fn=saturation_foo, false_fn=hue_foo))
             return x
 
-        perm = tf.random_shuffle(tf.range(4))
+        perm = tf.random.shuffle(tf.range(4))
         for i in range(4):
             image = apply_transform(perm[i], image)
             image = tf.clip_by_value(image, 0., 1.)
@@ -256,24 +262,24 @@ def _compute_crop_shape(
     image_height_float = tf.cast(image_height, tf.float32)
 
     def _requested_aspect_ratio_wider_than_image():
-        crop_height = tf.cast(tf.rint(
+        crop_height = tf.cast(tf.math.rint(
             crop_proportion / aspect_ratio * image_width_float), tf.int32)
-        crop_width = tf.cast(tf.rint(
+        crop_width = tf.cast(tf.math.rint(
             crop_proportion * image_width_float), tf.int32)
         return crop_height, crop_width
 
     def _image_wider_than_requested_aspect_ratio():
         crop_height = tf.cast(
-            tf.rint(crop_proportion * image_height_float), tf.int32)
-        crop_width = tf.cast(tf.rint(
+            tf.math.rint(crop_proportion * image_height_float), tf.int32)
+        crop_width = tf.cast(tf.math.rint(
             crop_proportion * aspect_ratio *
             image_height_float), tf.int32)
         return crop_height, crop_width
 
     return tf.cond(
-        aspect_ratio > image_width_float / image_height_float,
-        _requested_aspect_ratio_wider_than_image,
-        _image_wider_than_requested_aspect_ratio)
+        pred=aspect_ratio > image_width_float / image_height_float,
+        true_fn=_requested_aspect_ratio_wider_than_image,
+        false_fn=_image_wider_than_requested_aspect_ratio)
 
 
 def center_crop(image, height, width, crop_proportion):
@@ -286,7 +292,7 @@ def center_crop(image, height, width, crop_proportion):
     Returns:
       A `height` x `width` x channels Tensor holding a central crop of `image`.
     """
-    shape = tf.shape(image)
+    shape = tf.shape(input=image)
     image_height = shape[0]
     image_width = shape[1]
     crop_height, crop_width = _compute_crop_shape(
@@ -296,7 +302,7 @@ def center_crop(image, height, width, crop_proportion):
     image = tf.image.crop_to_bounding_box(
         image, offset_height, offset_width, crop_height, crop_width)
 
-    image = tf.image.resize_bicubic([image], [height, width])[0]
+    image = tf.image.resize([image], [height, width], method=tf.image.ResizeMethod.BICUBIC)[0]
 
     return image
 
@@ -330,10 +336,10 @@ def distorted_bounding_box_crop(image,
     Returns:
       (cropped image `Tensor`, distorted bbox `Tensor`).
     """
-    with tf.name_scope(scope, 'distorted_bounding_box_crop', [image, bbox]):
-        shape = tf.shape(image)
+    with tf.compat.v1.name_scope(scope, 'distorted_bounding_box_crop', [image, bbox]):
+        shape = tf.shape(input=image)
         sample_distorted_bounding_box = tf.image.sample_distorted_bounding_box(
-            shape,
+            image_size=shape,
             bounding_boxes=bbox,
             min_object_covered=min_object_covered,
             aspect_ratio_range=aspect_ratio_range,
@@ -370,7 +376,7 @@ def crop_and_resize(image, height, width):
         area_range=(0.08, 1.0),
         max_attempts=100,
         scope=None)
-    return tf.image.resize_bicubic([image], [height, width])[0]
+    return tf.image.resize([image], [height, width], method=tf.image.ResizeMethod.BICUBIC)[0]
 
 
 def gaussian_blur(image, kernel_size, sigma, padding='SAME'):
@@ -385,16 +391,16 @@ def gaussian_blur(image, kernel_size, sigma, padding='SAME'):
     Returns:
       A Tensor representing the blurred image.
     """
-    radius = tf.to_int32(kernel_size / 2)
+    radius = tf.cast(kernel_size / 2, dtype=tf.int32)
     kernel_size = radius * 2 + 1
-    x = tf.to_float(tf.range(-radius, radius + 1))
+    x = tf.cast(tf.range(-radius, radius + 1), dtype=tf.float32)
     blur_filter = tf.exp(
-        -tf.pow(x, 2.0) / (2.0 * tf.pow(tf.to_float(sigma), 2.0)))
-    blur_filter /= tf.reduce_sum(blur_filter)
+        -tf.pow(x, 2.0) / (2.0 * tf.pow(tf.cast(sigma, dtype=tf.float32), 2.0)))
+    blur_filter /= tf.reduce_sum(input_tensor=blur_filter)
     # One vertical and one horizontal filter.
     blur_v = tf.reshape(blur_filter, [kernel_size, 1, 1, 1])
     blur_h = tf.reshape(blur_filter, [1, kernel_size, 1, 1])
-    num_channels = tf.shape(image)[-1]
+    num_channels = tf.shape(input=image)[-1]
     blur_h = tf.tile(blur_h, [1, 1, num_channels, 1])
     blur_v = tf.tile(blur_v, [1, 1, num_channels, 1])
     expand_batch_dim = image.shape.ndims == 3
@@ -403,9 +409,9 @@ def gaussian_blur(image, kernel_size, sigma, padding='SAME'):
         # an extra dimension.
         image = tf.expand_dims(image, axis=0)
     blurred = tf.nn.depthwise_conv2d(
-        image, blur_h, strides=[1, 1, 1, 1], padding=padding)
+        input=image, filter=blur_h, strides=[1, 1, 1, 1], padding=padding)
     blurred = tf.nn.depthwise_conv2d(
-        blurred, blur_v, strides=[1, 1, 1, 1], padding=padding)
+        input=blurred, filter=blur_v, strides=[1, 1, 1, 1], padding=padding)
     if expand_batch_dim:
         blurred = tf.squeeze(blurred, axis=0)
     return blurred
@@ -468,14 +474,14 @@ def batch_random_blur(images_list, height, width, blur_probability=0.5):
     def generate_selector(p, bsz):
         shape = [bsz, 1, 1, 1]
         selector = tf.cast(
-            tf.less(tf.random_uniform(shape, 0, 1, dtype=tf.float32), p),
+            tf.less(tf.random.uniform(shape, 0, 1, dtype=tf.float32), p),
             tf.float32)
         return selector
 
     new_images_list = []
     for images in images_list:
         images_new = random_blur(images, height, width, p=1.)
-        selector = generate_selector(blur_probability, tf.shape(images)[0])
+        selector = generate_selector(blur_probability, tf.shape(input=images)[0])
         images = images_new * selector + images * (1 - selector)
         images = tf.clip_by_value(images, 0., 1.)
         new_images_list.append(images)
@@ -550,7 +556,7 @@ def preprocess_image(image, height, width, is_training=False,
 EETA_DEFAULT = 0.001
 
 
-class LARSOptimizer(tf.train.Optimizer):
+class LARSOptimizer(tf.compat.v1.train.Optimizer):
     """Layer-wise Adaptive Rate Scaling for large batch training.
 
     Introduced by "Large Batch Training of Convolutional Networks" by Y. You,
@@ -606,7 +612,7 @@ class LARSOptimizer(tf.train.Optimizer):
 
     def apply_gradients(self, grads_and_vars, global_step=None, name=None):
         if global_step is None:
-            global_step = tf.train.get_or_create_global_step()
+            global_step = tf.compat.v1.train.get_or_create_global_step()
         new_global_step = global_step + 1
 
         assignments = []
@@ -616,12 +622,12 @@ class LARSOptimizer(tf.train.Optimizer):
 
             param_name = param.op.name
 
-            v = tf.get_variable(
+            v = tf.compat.v1.get_variable(
                 name=param_name + "/Momentum",
                 shape=param.shape.as_list(),
                 dtype=tf.float32,
                 trainable=False,
-                initializer=tf.zeros_initializer())
+                initializer=tf.compat.v1.zeros_initializer())
 
             if self._use_weight_decay(param_name):
                 grad += self.weight_decay * param
@@ -629,10 +635,10 @@ class LARSOptimizer(tf.train.Optimizer):
             if self.classic_momentum:
                 trust_ratio = 1.0
                 if self._do_layer_adaptation(param_name):
-                    w_norm = tf.norm(param, ord=2)
-                    g_norm = tf.norm(grad, ord=2)
-                    trust_ratio = tf.where(
-                        tf.greater(w_norm, 0), tf.where(
+                    w_norm = tf.norm(tensor=param, ord=2)
+                    g_norm = tf.norm(tensor=grad, ord=2)
+                    trust_ratio = tf.compat.v1.where(
+                        tf.greater(w_norm, 0), tf.compat.v1.where(
                             tf.greater(g_norm, 0), (self.eeta *
                                                     w_norm / g_norm),
                             1.0),
@@ -655,10 +661,10 @@ class LARSOptimizer(tf.train.Optimizer):
 
                 trust_ratio = 1.0
                 if self._do_layer_adaptation(param_name):
-                    w_norm = tf.norm(param, ord=2)
-                    v_norm = tf.norm(update, ord=2)
-                    trust_ratio = tf.where(
-                        tf.greater(w_norm, 0), tf.where(
+                    w_norm = tf.norm(tensor=param, ord=2)
+                    v_norm = tf.norm(tensor=update, ord=2)
+                    trust_ratio = tf.compat.v1.where(
+                        tf.greater(w_norm, 0), tf.compat.v1.where(
                             tf.greater(v_norm, 0), (self.eeta *
                                                     w_norm / v_norm),
                             1.0),
@@ -703,6 +709,8 @@ if __name__ == "__main__":
 
     # @title Load tensorflow datasets: we use tensorflow flower dataset as an example
     dataset_name = 'chest_xray'
+    dataset_name = 'tf_flowers'
+    dataset_name = 'chest_xray'
 
     if dataset_name == 'tf_flowers':
         train_dataset, tfds_info = tfds.load(dataset_name, split='train', with_info=True,
@@ -721,32 +729,48 @@ if __name__ == "__main__":
             x['image'], 224, 224, is_training=False, color_distort=False)
         return x
 
-    x = train_dataset \
+    x_ds = train_dataset \
             .map(_preprocess, #num_parallel_calls=tf.data.experimental.AUTOTUNE, # Not sure if map is optimal or not... 
                     deterministic=False) \
-            .prefetch(tf.data.experimental.AUTOTUNE) \
             .shuffle(buffer_size)\
-            .batch(batch_size)
+            .batch(batch_size)\
+            .prefetch(tf.data.experimental.AUTOTUNE) 
+            
 
-    x = tf.data.make_one_shot_iterator(x).get_next() # TODO: this is probably the reson why it's only itterating once over the data
 
+    x_iter = tf.compat.v1.data.make_one_shot_iterator(x_ds)
+    x_init = x_iter.make_initializer(x_ds)
+    x = x_iter.get_next()
+
+    print(f"{type(x)} {type(x['image'])} {x['image']} {x['label']}")
     # @title Load module and construct the computation graph
     learning_rate = yml_config['finetuning']['learning_rate']
     momentum = yml_config['finetuning']['momentum']
     weight_decay = yml_config['finetuning']['weight_decay']
+    epoch_save_step = yml_config['finetuning']['epoch_save_step']
+    load_ckpt = yml_config['finetuning'].get('load_ckpt')
 
     # Load the base network and set it to non-trainable (for speedup fine-tuning)
     # hub_path = 'gs://simclr-checkpoints/simclrv2/finetuned_100pct/r50_1x_sk0/hub/'
     hub_path = os.path.abspath('./r50_1x_sk0/hub/')
-    hub_path = yml_config['finetuning']['model_path']
+    #hub_path = yml_config['finetuning']['model_path']
     module = hub.Module(hub_path, trainable=False)
     key = module(inputs=x['image'], signature="default", as_dict=True)
 
     # Attach a trainable linear layer to adapt for the new task.
-    with tf.variable_scope('head_supervised_new', reuse=tf.AUTO_REUSE):
-        logits_t = tf.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
-    loss_t = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
-        labels=tf.one_hot(x['label'], num_classes), logits=logits_t))
+    if dataset_name == 'tf_flowers':
+        with tf.compat.v1.variable_scope('head_supervised_new', reuse=tf.compat.v1.AUTO_REUSE):
+            logits_t = tf.compat.v1.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
+        loss_t = tf.reduce_mean(input_tensor=tf.nn.softmax_cross_entropy_with_logits(
+            labels=tf.one_hot(x['label'], num_classes), logits=logits_t))
+    elif dataset_name == 'chest_xray':
+        with tf.compat.v1.variable_scope('head_supervised_new', reuse=tf.compat.v1.AUTO_REUSE):
+            logits_t = tf.compat.v1.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
+            loss_t = tf.reduce_mean(input_tensor=tf.nn.sigmoid_cross_entropy_with_logits(
+            #loss_t = tf.reduce_mean(input_tensor=tf.nn.softmax_cross_entropy_with_logits(
+            labels=tf.convert_to_tensor(value=x['label']), logits=logits_t))
+            #labels=tf.one_hot(x['label'], num_classes), logits=logits_t))
+
 
     # Setup optimizer and training op.
     optimizer = LARSOptimizer(
@@ -754,35 +778,50 @@ if __name__ == "__main__":
         momentum=momentum,
         weight_decay=weight_decay,
         exclude_from_weight_decay=['batch_normalization', 'bias', 'head_supervised'])
-    variables_to_train = tf.trainable_variables()
+    variables_to_train = tf.compat.v1.trainable_variables()
     train_op = optimizer.minimize(
-        loss_t, global_step=tf.train.get_or_create_global_step(),
+        loss_t, global_step=tf.compat.v1.train.get_or_create_global_step(),
         var_list=variables_to_train)
 
     print('Variables to train:', variables_to_train)
     key  # The accessible tensor in the return dictionary
 
-    sess = tf.Session()
-    sess.run(tf.global_variables_initializer())
+    # Add ops to save and restore all the variables.
+    sess = tf.compat.v1.Session()
+    ckpt = tf.compat.v1.train.Saver()
+    current_time = datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
+    directory = os.path.join(os.path.abspath('./output'), current_time)
+    is_time_to_save_session = partial(model_ckpt.save_session, epoch_save_step, ckpt, output=directory)
+    if load_ckpt is not None:
+        ckpt.restore(sess, load_ckpt)
+    else:
+        sess.run(tf.compat.v1.global_variables_initializer())
 
     # @title We fine-tune the new *linear layer* for just a few iterations.
     total_iterations = yml_config['finetuning']['epochs']
-
     for it in range(total_iterations):
-        _, loss, image, logits, labels = sess.run(
-            (train_op, loss_t, x['image'], logits_t, x['label']))
-        pred=logits.argmax(-1)
-        correct=np.sum(pred == labels)
-        total=labels.size
-        print("[Iter {}] Loss: {} Top 1: {}".format(
-            it+1, loss, correct/float(total)))
+        # Init dataset iterator        
+        sess.run(x_init)
+
+        tot_loss = 0
+        for _ in range(round(num_images / batch_size)):
+            _, loss, image, logits, labels = sess.run(fetches=(train_op, loss_t, x['image'], logits_t, x['label']))
+            pred = logits.argmax(-1)
+            correct = np.sum(pred == labels)
+            total = labels.size
+            tot_loss += loss
+            print("[Iter {}] Total Loss: {} Loss: {} Top 1: {}".format(it + 1, tot_loss, loss, correct / float(total)))
+        print("[Iter {}] Total Loss: {} Loss: {} Top 1: {}".format(it+1, tot_loss, loss , correct/float(total)))
+
+        # Is it time to save the session?
+        is_time_to_save_session(it, sess)
 
     # @title Plot the images and predictions
     fig, axes=plt.subplots(5, 1, figsize=(15, 15))
     for i in range(5):
         axes[i].imshow(image[i])
-        true_text=tf_flowers_labels[labels[i]]
-        pred_text=tf_flowers_labels[pred[i]]
+        true_text=chest_xray.XR_LABELS[labels[i]]
+        pred_text=chest_xray.XR_LABELS[pred[i]]
         axes[i].axis('off')
         axes[i].text(256, 128, 'Truth: ' + true_text + '\n' + 'Pred: ' + pred_text)
 
