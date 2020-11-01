@@ -370,6 +370,7 @@ def main(argv):
         build_input_fn = partial(data_lib.build_chest_xray_fn, data_path)
         num_train_examples = info.get('num_examples')
         num_classes = info.get('num_classes')
+        num_eval_examples = info.get('num_eval_classes')
     else:
         builder = tfds.builder(FLAGS.dataset, data_dir=FLAGS.data_dir)
         builder.download_and_prepare()
@@ -379,7 +380,7 @@ def main(argv):
         build_input_fn = data_lib.build_input_fn
 
     train_steps = model_util.get_train_steps(num_train_examples)
-    #eval_steps = int(math.ceil(num_eval_examples / FLAGS.eval_batch_size))
+    eval_steps = int(math.ceil(num_eval_examples / FLAGS.eval_batch_size))
     epoch_steps = int(round(num_train_examples / FLAGS.train_batch_size))
 
     resnet.BATCH_NORM_DECAY = FLAGS.batch_norm_decay

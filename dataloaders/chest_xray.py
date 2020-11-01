@@ -90,14 +90,17 @@ class XRayDataSet(tf.data.Dataset):
         """
         df = pd.read_csv(os.path.join(data_path, "Data_Entry_2017.csv"))
 
-        # Look at dataframe and split data
+        # Look at dataframe and split data, generate info
         if train:
             max_id = df["Patient ID"].max()
             possible_ids = range(1, max_id + 1)
             random.seed(seed)
             split_ids = random.sample(possible_ids, int(max_id * split))
-            df = df[df["Patient ID"].isin(split_ids)]
-            dataframe = df.sample(frac=1).reset_index(drop=True) # shuffle data
+            train_df = df[df["Patient ID"].isin(split_ids)]
+            
+            dataframe = train_df.sample(frac=1).reset_index(drop=True) # shuffle data
+            num_examples = train_df.shape[0]
+            num_eval_examples = df.shape[0] - num_examples
         else:
             max_id = df["Patient ID"].max()
             possible_ids = range(1, max_id + 1)
@@ -106,6 +109,10 @@ class XRayDataSet(tf.data.Dataset):
             split_ids = np.setdiff1d(range(1, max_id + 1), train_samples, assume_unique=True).tolist()
             dataframe = df[df["Patient ID"].isin(split_ids)]
 
+            num_eval_examples = dataframe.shape[0]
+            num_examples = df.shape[0] - num_eval_examples
+
+        # Do we just want the info, or do we want a new dataset. 
         if return_tf_dataset:
             img_data_path = os.path.join(data_path, "images-224")
             data = PrepareData(img_data_path, dataframe, config, seed)
@@ -113,7 +120,9 @@ class XRayDataSet(tf.data.Dataset):
             return_data = dataset.map(load_img)
         else:
             return_data = None
-        return return_data, {"num_examples": dataframe.shape[0], "num_classes": xray_n_class}
+        return return_data, {"num_examples": num_examples, 
+                            "num_classes": xray_n_class,
+                            "num_eval_examples": num_eval_examples}
 
 
 if __name__ == "__main__":
