@@ -72,7 +72,7 @@ def PrepareData(
 
     # TODO change num classes
     # < YC use dict's len 29/10/2020>
-    return (index_imgs, labels), {"num_examples": df.shape[0], "num_classes": xray_n_class}
+    return (index_imgs, labels) 
     
 
 class XRayDataSet(tf.data.Dataset):
@@ -106,14 +106,14 @@ class XRayDataSet(tf.data.Dataset):
             split_ids = np.setdiff1d(range(1, max_id + 1), train_samples, assume_unique=True).tolist()
             dataframe = df[df["Patient ID"].isin(split_ids)]
 
-        img_data_path = os.path.join(data_path, "images-224")
-        data, info = PrepareData(img_data_path, dataframe, config, seed)
         if return_tf_dataset:
+            img_data_path = os.path.join(data_path, "images-224")
+            data = PrepareData(img_data_path, dataframe, config, seed)
             dataset = tf.data.Dataset.from_tensor_slices( data )
             return_data = dataset.map(load_img)
         else:
-            return_data = data
-        return return_data, info
+            return_data = None
+        return return_data, {"num_examples": dataframe.shape[0], "num_classes": xray_n_class}
 
 
 if __name__ == "__main__":

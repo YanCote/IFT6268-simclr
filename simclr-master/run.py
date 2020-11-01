@@ -25,7 +25,7 @@ import os, sys
 from absl import app
 from absl import flags
 from functools import partial
-from datatime import datetime
+from datetime import datetime
 
 import resnet
 import data as data_lib
@@ -421,6 +421,12 @@ def main(argv):
         eval_batch_size=FLAGS.eval_batch_size,
         use_tpu=FLAGS.use_tpu)
 
+    # save flags for this experiment
+    if not os.path.exists(FLAGS.model_dir):
+        os.makedirs(FLAGS.model_dir)
+    FLAGS.append_flags_into_file(os.path.join(FLAGS.model_dir, 'experiment_flags.txt'))
+
+    # Train/Eval
     if FLAGS.mode == 'eval':
         for ckpt in tf.train.checkpoints_iterator(
                 run_config.model_dir, min_interval_secs=15):
