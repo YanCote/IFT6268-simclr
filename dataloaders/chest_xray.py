@@ -8,6 +8,7 @@ import typing
 import random
 from tensorflow.python.ops import io_ops
 from tensorflow.python.ops import image_ops
+import tensorflow_datasets as tfds
 
 XR_LABELS = {
     'Atelectasis': 0,
@@ -46,7 +47,7 @@ def load_img(path, one_hot_labels):
 
     return {'image': img, 'label': one_hot_labels}
 
-def BuildDataSet(
+def PrepareData(
     img_data_path: str,
     df:pd.DataFrame, 
     config: typing.Dict[typing.AnyStr, typing.Any] = None,
@@ -69,15 +70,9 @@ def BuildDataSet(
             one_hot_labels[XR_LABELS[key]] = 1 if key in labels[i] else 0
         labels[i] = tf.cast(one_hot_labels, dtype=tf.float32)
 
-    # Create an interleaved dataset so it's faster. Each dataset is responsible to load it's own compressed image file.
-    dataset = tf.data.Dataset.from_tensor_slices( (index_imgs, labels) )
-    #dataset = files.interleave(wrap_generator, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-
-    dataset = dataset.map(load_img)
-
     # TODO change num classes
     # < YC use dict's len 29/10/2020>
-    return dataset, {"num_examples": df.shape[0], "num_classes": xray_n_class}
+    return (index_imgs, labels), {"num_examples": df.shape[0], "num_classes": xray_n_class}
     
 
 class XRayDataSet(tf.data.Dataset):
@@ -87,7 +82,8 @@ class XRayDataSet(tf.data.Dataset):
         config: typing.Dict[typing.AnyStr, typing.Any] = None,
         train: bool = True,
         seed: int = 1337,
-        split: float =  0.10,
+        split: float =  0.75,
+        return_tf_dataset: bool = True,
     ):
         """
         Make sure to use same random seed for training and validation datasets so they respect the data split. 
@@ -100,7 +96,8 @@ class XRayDataSet(tf.data.Dataset):
             possible_ids = range(1, max_id + 1)
             random.seed(seed)
             split_ids = random.sample(possible_ids, int(max_id * split))
-            dataframe = df[df["Patient ID"].isin(split_ids)]
+            df = df[df["Patient ID"].isin(split_ids)]
+            dataframe = df.sample(frac=1).reset_index(drop=True) # shuffle data
         else:
             max_id = df["Patient ID"].max()
             possible_ids = range(1, max_id + 1)
@@ -110,7 +107,13 @@ class XRayDataSet(tf.data.Dataset):
             dataframe = df[df["Patient ID"].isin(split_ids)]
 
         img_data_path = os.path.join(data_path, "images-224")
-        return BuildDataSet(img_data_path, dataframe, config, seed)
+        data, info = PrepareData(img_data_path, dataframe, config, seed)
+        if return_tf_dataset:
+            dataset = tf.data.Dataset.from_tensor_slices( data )
+            return_data = dataset.map(load_img)
+        else:
+            return_data = data
+        return return_data, info
 
 
 if __name__ == "__main__":

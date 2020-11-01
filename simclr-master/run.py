@@ -21,9 +21,11 @@ from __future__ import print_function
 
 import json
 import math
-import os
+import os, sys
 from absl import app
 from absl import flags
+from functools import partial
+from datatime import datetime
 
 import resnet
 import data as data_lib
@@ -33,6 +35,10 @@ import model_util as model_util
 import tensorflow.compat.v1 as tf
 import tensorflow_datasets as tfds
 import tensorflow_hub as hub
+
+if os.path.abspath(".") not in sys.path:
+    sys.path.append(os.path.abspath("."))
+import dataloaders.chest_xray as chest_xray
 
 
 FLAGS = flags.FLAGS
@@ -59,7 +65,7 @@ flags.DEFINE_float(
     'Batch norm decay parameter.')
 
 flags.DEFINE_integer(
-    'train_batch_size', 512,
+    'train_batch_size', 8,
     'Batch size for training.')
 
 flags.DEFINE_string(
@@ -67,7 +73,7 @@ flags.DEFINE_string(
     'Split for training.')
 
 flags.DEFINE_integer(
-    'train_epochs', 100,
+    'train_epochs', 10,
     'Number of epochs to train for.')
 
 flags.DEFINE_integer(
@@ -75,15 +81,15 @@ flags.DEFINE_integer(
     'Number of steps to train for. If provided, overrides train_epochs.')
 
 flags.DEFINE_integer(
-    'eval_batch_size', 256,
+    'eval_batch_size', 8,
     'Batch size for eval.')
 
 flags.DEFINE_integer(
-    'train_summary_steps', 100,
+    'train_summary_steps', 1,
     'Steps before saving training summaries. If 0, will not save.')
 
 flags.DEFINE_integer(
-    'checkpoint_epochs', 1,
+    'checkpoint_epochs', 5,
     'Number of epochs between checkpoints/summaries.')
 
 flags.DEFINE_integer(
@@ -96,7 +102,7 @@ flags.DEFINE_string(
     'Split for evaluation.')
 
 flags.DEFINE_string(
-    'dataset', 'imagenet2012',
+    'dataset', 'chest_xray',
     'Name of a dataset.')
 
 flags.DEFINE_bool(
@@ -114,7 +120,7 @@ flags.DEFINE_enum(
     'The train mode controls different objectives and trainable components.')
 
 flags.DEFINE_string(
-    'checkpoint', None,
+    'checkpoint', "",#"C:/Users/Game/AI/SSL/project/IFT6268-simclr/r50_1x_sk0/hub",
     'Loading from the given checkpoint for continued training or fine-tuning.')
 
 flags.DEFINE_string(
@@ -136,8 +142,9 @@ flags.DEFINE_string(
     'Address/name of the TensorFlow master to use. By default, use an '
     'in-process master.')
 
+current_time = datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
 flags.DEFINE_string(
-    'model_dir', None,
+    'model_dir', "H:/AI_Projects/outputs/runs/SimCLR/{0}".format(current_time),
     'Model directory for training.')
 
 flags.DEFINE_string(
@@ -145,7 +152,7 @@ flags.DEFINE_string(
     'Directory where dataset is stored.')
 
 flags.DEFINE_bool(
-    'use_tpu', True,
+    'use_tpu', False,
     'Whether to run on TPU.')
 
 tf.flags.DEFINE_string(
@@ -245,191 +252,202 @@ flags.DEFINE_boolean(
 
 
 def build_hub_module(model, num_classes, global_step, checkpoint_path):
-  """Create TF-Hub module."""
+    """Create TF-Hub module."""
 
-  tags_and_args = [
-      # The default graph is built with batch_norm, dropout etc. in inference
-      # mode. This graph version is good for inference, not training.
-      ([], {'is_training': False}),
-      # A separate "train" graph builds batch_norm, dropout etc. in training
-      # mode.
-      (['train'], {'is_training': True}),
-  ]
+    tags_and_args = [
+        # The default graph is built with batch_norm, dropout etc. in inference
+        # mode. This graph version is good for inference, not training.
+        ([], {'is_training': False}),
+        # A separate "train" graph builds batch_norm, dropout etc. in training
+        # mode.
+        (['train'], {'is_training': True}),
+    ]
 
-  def module_fn(is_training):
-    """Function that builds TF-Hub module."""
-    endpoints = {}
-    inputs = tf.placeholder(
-        tf.float32, [None, None, None, 3])
-    with tf.variable_scope('base_model', reuse=tf.AUTO_REUSE):
-      hiddens = model(inputs, is_training)
-      for v in ['initial_conv', 'initial_max_pool', 'block_group1',
-                'block_group2', 'block_group3', 'block_group4',
-                'final_avg_pool']:
-        endpoints[v] = tf.get_default_graph().get_tensor_by_name(
-            'base_model/{}:0'.format(v))
-    if FLAGS.train_mode == 'pretrain':
-      hiddens_proj = model_util.projection_head(hiddens, is_training)
-      endpoints['proj_head_input'] = hiddens
-      endpoints['proj_head_output'] = hiddens_proj
-    else:
-      logits_sup = model_util.supervised_head(
-          hiddens, num_classes, is_training)
-      endpoints['logits_sup'] = logits_sup
-    hub.add_signature(inputs=dict(images=inputs),
-                      outputs=dict(endpoints, default=hiddens))
+    def module_fn(is_training):
+        """Function that builds TF-Hub module."""
+        endpoints = {}
+        inputs = tf.placeholder(
+            tf.float32, [None, None, None, 3])
+        with tf.variable_scope('base_model', reuse=tf.AUTO_REUSE):
+            hiddens = model(inputs, is_training)
+            for v in ['initial_conv', 'initial_max_pool', 'block_group1',
+                      'block_group2', 'block_group3', 'block_group4',
+                      'final_avg_pool']:
+                endpoints[v] = tf.get_default_graph().get_tensor_by_name(
+                    'base_model/{}:0'.format(v))
+        if FLAGS.train_mode == 'pretrain':
+            hiddens_proj = model_util.projection_head(hiddens, is_training)
+            endpoints['proj_head_input'] = hiddens
+            endpoints['proj_head_output'] = hiddens_proj
+        else:
+            logits_sup = model_util.supervised_head(
+                hiddens, num_classes, is_training)
+            endpoints['logits_sup'] = logits_sup
+        hub.add_signature(inputs=dict(images=inputs),
+                          outputs=dict(endpoints, default=hiddens))
 
-  # Drop the non-supported non-standard graph collection.
-  drop_collections = ['trainable_variables_inblock_%d'%d for d in range(6)]
-  spec = hub.create_module_spec(module_fn, tags_and_args, drop_collections)
-  hub_export_dir = os.path.join(FLAGS.model_dir, 'hub')
-  checkpoint_export_dir = os.path.join(hub_export_dir, str(global_step))
-  if tf.io.gfile.exists(checkpoint_export_dir):
-    # Do not save if checkpoint already saved.
-    tf.io.gfile.rmtree(checkpoint_export_dir)
-  spec.export(
-      checkpoint_export_dir,
-      checkpoint_path=checkpoint_path,
-      name_transform_fn=None)
+    # Drop the non-supported non-standard graph collection.
+    drop_collections = ['trainable_variables_inblock_%d' % d for d in range(6)]
+    spec = hub.create_module_spec(module_fn, tags_and_args, drop_collections)
+    hub_export_dir = os.path.join(FLAGS.model_dir, 'hub')
+    checkpoint_export_dir = os.path.join(hub_export_dir, str(global_step))
+    if tf.io.gfile.exists(checkpoint_export_dir):
+        # Do not save if checkpoint already saved.
+        tf.io.gfile.rmtree(checkpoint_export_dir)
+    spec.export(
+        checkpoint_export_dir,
+        checkpoint_path=checkpoint_path,
+        name_transform_fn=None)
 
-  if FLAGS.keep_hub_module_max > 0:
-    # Delete old exported Hub modules.
-    exported_steps = []
-    for subdir in tf.io.gfile.listdir(hub_export_dir):
-      if not subdir.isdigit():
-        continue
-      exported_steps.append(int(subdir))
-    exported_steps.sort()
-    for step_to_delete in exported_steps[:-FLAGS.keep_hub_module_max]:
-      tf.io.gfile.rmtree(os.path.join(hub_export_dir, str(step_to_delete)))
+    if FLAGS.keep_hub_module_max > 0:
+        # Delete old exported Hub modules.
+        exported_steps = []
+        for subdir in tf.io.gfile.listdir(hub_export_dir):
+            if not subdir.isdigit():
+                continue
+            exported_steps.append(int(subdir))
+        exported_steps.sort()
+        for step_to_delete in exported_steps[:-FLAGS.keep_hub_module_max]:
+            tf.io.gfile.rmtree(os.path.join(
+                hub_export_dir, str(step_to_delete)))
 
 
 def perform_evaluation(estimator, input_fn, eval_steps, model, num_classes,
                        checkpoint_path=None):
-  """Perform evaluation.
+    """Perform evaluation.
 
-  Args:
-    estimator: TPUEstimator instance.
-    input_fn: Input function for estimator.
-    eval_steps: Number of steps for evaluation.
-    model: Instance of transfer_learning.models.Model.
-    num_classes: Number of classes to build model for.
-    checkpoint_path: Path of checkpoint to evaluate.
+    Args:
+      estimator: TPUEstimator instance.
+      input_fn: Input function for estimator.
+      eval_steps: Number of steps for evaluation.
+      model: Instance of transfer_learning.models.Model.
+      num_classes: Number of classes to build model for.
+      checkpoint_path: Path of checkpoint to evaluate.
 
-  Returns:
-    result: A Dict of metrics and their values.
-  """
-  if not checkpoint_path:
-    checkpoint_path = estimator.latest_checkpoint()
-  result = estimator.evaluate(
-      input_fn, eval_steps, checkpoint_path=checkpoint_path,
-      name=FLAGS.eval_name)
+    Returns:
+      result: A Dict of metrics and their values.
+    """
+    if not checkpoint_path:
+        checkpoint_path = estimator.latest_checkpoint()
+    result = estimator.evaluate(
+        input_fn, eval_steps, checkpoint_path=checkpoint_path,
+        name=FLAGS.eval_name)
 
-  # Record results as JSON.
-  result_json_path = os.path.join(FLAGS.model_dir, 'result.json')
-  with tf.io.gfile.GFile(result_json_path, 'w') as f:
-    json.dump({k: float(v) for k, v in result.items()}, f)
-  result_json_path = os.path.join(
-      FLAGS.model_dir, 'result_%d.json'%result['global_step'])
-  with tf.io.gfile.GFile(result_json_path, 'w') as f:
-    json.dump({k: float(v) for k, v in result.items()}, f)
-  flag_json_path = os.path.join(FLAGS.model_dir, 'flags.json')
-  with tf.io.gfile.GFile(flag_json_path, 'w') as f:
-    json.dump(FLAGS.flag_values_dict(), f)
+    # Record results as JSON.
+    result_json_path = os.path.join(FLAGS.model_dir, 'result.json')
+    with tf.io.gfile.GFile(result_json_path, 'w') as f:
+        json.dump({k: float(v) for k, v in result.items()}, f)
+    result_json_path = os.path.join(
+        FLAGS.model_dir, 'result_%d.json' % result['global_step'])
+    with tf.io.gfile.GFile(result_json_path, 'w') as f:
+        json.dump({k: float(v) for k, v in result.items()}, f)
+    flag_json_path = os.path.join(FLAGS.model_dir, 'flags.json')
+    with tf.io.gfile.GFile(flag_json_path, 'w') as f:
+        json.dump(FLAGS.flag_values_dict(), f)
 
-  # Save Hub module.
-  build_hub_module(model, num_classes,
-                   global_step=result['global_step'],
-                   checkpoint_path=checkpoint_path)
+    # Save Hub module.
+    build_hub_module(model, num_classes,
+                     global_step=result['global_step'],
+                     checkpoint_path=checkpoint_path)
 
-  return result
+    return result
 
 
 def main(argv):
-  if len(argv) > 1:
-    raise app.UsageError('Too many command-line arguments.')
+    if len(argv) > 1:
+        raise app.UsageError('Too many command-line arguments.')
 
-  # Enable training summary.
-  if FLAGS.train_summary_steps > 0:
-    tf.config.set_soft_device_placement(True)
+    # Enable training summary.
+    if FLAGS.train_summary_steps > 0:
+        tf.config.set_soft_device_placement(True)
 
-
-  builder = tfds.builder(FLAGS.dataset, data_dir=FLAGS.data_dir)
-  builder.download_and_prepare()
-  num_train_examples = builder.info.splits[FLAGS.train_split].num_examples
-  num_eval_examples = builder.info.splits[FLAGS.eval_split].num_examples
-  num_classes = builder.info.features['label'].num_classes
-
-  train_steps = model_util.get_train_steps(num_train_examples)
-  eval_steps = int(math.ceil(num_eval_examples / FLAGS.eval_batch_size))
-  epoch_steps = int(round(num_train_examples / FLAGS.train_batch_size))
-
-  resnet.BATCH_NORM_DECAY = FLAGS.batch_norm_decay
-  model = resnet.resnet_v1(
-      resnet_depth=FLAGS.resnet_depth,
-      width_multiplier=FLAGS.width_multiplier,
-      cifar_stem=FLAGS.image_size <= 32)
-
-  checkpoint_steps = (
-      FLAGS.checkpoint_steps or (FLAGS.checkpoint_epochs * epoch_steps))
-
-  cluster = None
-  if FLAGS.use_tpu and FLAGS.master is None:
-    if FLAGS.tpu_name:
-      cluster = tf.distribute.cluster_resolver.TPUClusterResolver(
-          FLAGS.tpu_name, zone=FLAGS.tpu_zone, project=FLAGS.gcp_project)
+    # Choose dataset. 
+    if FLAGS.dataset == "chest_xray":
+        # Not really a builder, but it's compatible
+        # TODO config
+        data_path = "H:/data/chest-xray"
+        builder, info = chest_xray.XRayDataSet(data_path, config=None, train=True, return_tf_dataset=False)
+        build_input_fn = partial(data_lib.build_chest_xray_fn, data_path)
+        num_train_examples = info.get('num_examples')
+        num_classes = info.get('num_classes')
     else:
-      cluster = tf.distribute.cluster_resolver.TPUClusterResolver()
-      tf.config.experimental_connect_to_cluster(cluster)
-      tf.tpu.experimental.initialize_tpu_system(cluster)
+        builder = tfds.builder(FLAGS.dataset, data_dir=FLAGS.data_dir)
+        builder.download_and_prepare()
+        num_train_examples = builder.info.splits[FLAGS.train_split].num_examples
+        num_eval_examples = builder.info.splits[FLAGS.eval_split].num_examples
+        num_classes = builder.info.features['label'].num_classes
+        build_input_fn = data_lib.build_input_fn
 
-  default_eval_mode = tf.estimator.tpu.InputPipelineConfig.PER_HOST_V1
-  sliced_eval_mode = tf.estimator.tpu.InputPipelineConfig.SLICED
-  run_config = tf.estimator.tpu.RunConfig(
-      tpu_config=tf.estimator.tpu.TPUConfig(
-          iterations_per_loop=checkpoint_steps,
-          eval_training_input_configuration=sliced_eval_mode
-          if FLAGS.use_tpu else default_eval_mode),
-      model_dir=FLAGS.model_dir,
-      save_summary_steps=checkpoint_steps,
-      save_checkpoints_steps=checkpoint_steps,
-      keep_checkpoint_max=FLAGS.keep_checkpoint_max,
-      master=FLAGS.master,
-      cluster=cluster)
-  estimator = tf.estimator.tpu.TPUEstimator(
-      model_lib.build_model_fn(model, num_classes, num_train_examples),
-      config=run_config,
-      train_batch_size=FLAGS.train_batch_size,
-      eval_batch_size=FLAGS.eval_batch_size,
-      use_tpu=FLAGS.use_tpu)
+    train_steps = model_util.get_train_steps(num_train_examples)
+    #eval_steps = int(math.ceil(num_eval_examples / FLAGS.eval_batch_size))
+    epoch_steps = int(round(num_train_examples / FLAGS.train_batch_size))
 
-  if FLAGS.mode == 'eval':
-    for ckpt in tf.train.checkpoints_iterator(
-        run_config.model_dir, min_interval_secs=15):
-      try:
-        result = perform_evaluation(
-            estimator=estimator,
-            input_fn=data_lib.build_input_fn(builder, False),
-            eval_steps=eval_steps,
-            model=model,
-            num_classes=num_classes,
-            checkpoint_path=ckpt)
-      except tf.errors.NotFoundError:
-        continue
-      if result['global_step'] >= train_steps:
-        return
-  else:
-    estimator.train(
-        data_lib.build_input_fn(builder, True), max_steps=train_steps)
-    if FLAGS.mode == 'train_then_eval':
-      perform_evaluation(
-          estimator=estimator,
-          input_fn=data_lib.build_input_fn(builder, False),
-          eval_steps=eval_steps,
-          model=model,
-          num_classes=num_classes)
+    resnet.BATCH_NORM_DECAY = FLAGS.batch_norm_decay
+    model = resnet.resnet_v1(
+        resnet_depth=FLAGS.resnet_depth,
+        width_multiplier=FLAGS.width_multiplier,
+        cifar_stem=FLAGS.image_size <= 32)
+
+    checkpoint_steps = (
+        FLAGS.checkpoint_steps or (FLAGS.checkpoint_epochs * epoch_steps))
+
+    cluster = None
+    if FLAGS.use_tpu and FLAGS.master is None:
+        if FLAGS.tpu_name:
+            cluster = tf.distribute.cluster_resolver.TPUClusterResolver(
+                FLAGS.tpu_name, zone=FLAGS.tpu_zone, project=FLAGS.gcp_project)
+        else:
+            cluster = tf.distribute.cluster_resolver.TPUClusterResolver()
+            tf.config.experimental_connect_to_cluster(cluster)
+            tf.tpu.experimental.initialize_tpu_system(cluster)
+
+    default_eval_mode = tf.estimator.tpu.InputPipelineConfig.PER_HOST_V1
+    sliced_eval_mode = tf.estimator.tpu.InputPipelineConfig.SLICED
+    run_config = tf.estimator.tpu.RunConfig(
+        tpu_config=tf.estimator.tpu.TPUConfig(
+            iterations_per_loop=checkpoint_steps,
+            eval_training_input_configuration=sliced_eval_mode
+            if FLAGS.use_tpu else default_eval_mode),
+        model_dir=FLAGS.model_dir,
+        save_summary_steps=checkpoint_steps,
+        save_checkpoints_steps=checkpoint_steps,
+        keep_checkpoint_max=FLAGS.keep_checkpoint_max,
+        master=FLAGS.master,
+        cluster=cluster)
+    estimator = tf.estimator.tpu.TPUEstimator(
+        model_lib.build_model_fn(model, num_classes, num_train_examples),
+        config=run_config,
+        train_batch_size=FLAGS.train_batch_size,
+        eval_batch_size=FLAGS.eval_batch_size,
+        use_tpu=FLAGS.use_tpu)
+
+    if FLAGS.mode == 'eval':
+        for ckpt in tf.train.checkpoints_iterator(
+                run_config.model_dir, min_interval_secs=15):
+            try:
+                result = perform_evaluation(
+                    estimator=estimator,
+                    input_fn=build_input_fn(builder, False),
+                    eval_steps=eval_steps,
+                    model=model,
+                    num_classes=num_classes,
+                    checkpoint_path=ckpt)
+            except tf.errors.NotFoundError:
+                continue
+            if result['global_step'] >= train_steps:
+                return
+    else:
+        estimator.train(
+            build_input_fn(builder, True), max_steps=train_steps)
+        if FLAGS.mode == 'train_then_eval':
+            perform_evaluation(
+                estimator=estimator,
+                input_fn=build_input_fn(builder, False),
+                eval_steps=eval_steps,
+                model=model,
+                num_classes=num_classes)
 
 
 if __name__ == '__main__':
-  tf.disable_v2_behavior()  # Disable eager mode when running with TF2.
-  app.run(main)
+    tf.disable_v2_behavior()  # Disable eager mode when running with TF2.
+    app.run(main)
