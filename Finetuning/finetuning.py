@@ -96,7 +96,7 @@ else:  # use default strategy
 
 imagenet_int_to_str = {}
 
-with open('./Finetuning/ilsvrc2012_wordnet_lemmas.txt', 'r') as f:
+with open('./ilsvrc2012_wordnet_lemmas.txt', 'r') as f:
     for i in range(1000):
         row = f.readline()
         row = row.rstrip()
