@@ -33,7 +33,7 @@ import model as model_lib
 import model_util as model_util
 
 import tensorflow.compat.v1 as tf
-import tensorflow_datasets as tfds
+#import tensorflow_datasets as tfds
 import tensorflow_hub as hub
 
 if os.path.abspath(".") not in sys.path:
@@ -65,7 +65,7 @@ flags.DEFINE_float(
     'Batch norm decay parameter.')
 
 flags.DEFINE_integer(
-    'train_batch_size', 8,
+    'train_batch_size', 256,
     'Batch size for training.')
 
 flags.DEFINE_string(
@@ -73,7 +73,7 @@ flags.DEFINE_string(
     'Split for training.')
 
 flags.DEFINE_integer(
-    'train_epochs', 10,
+    'train_epochs', 100,
     'Number of epochs to train for.')
 
 flags.DEFINE_integer(
@@ -81,7 +81,7 @@ flags.DEFINE_integer(
     'Number of steps to train for. If provided, overrides train_epochs.')
 
 flags.DEFINE_integer(
-    'eval_batch_size', 8,
+    'eval_batch_size', 256,
     'Batch size for eval.')
 
 flags.DEFINE_integer(
@@ -144,7 +144,7 @@ flags.DEFINE_string(
 
 current_time = datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
 flags.DEFINE_string(
-    'model_dir', "H:/AI_Projects/outputs/runs/SimCLR/{0}".format(current_time),
+    'model_dir', "~/scratch/runs/pretrain-simclr/{0}".format(current_time),
     'Model directory for training.')
 
 flags.DEFINE_string(
@@ -365,14 +365,14 @@ def main(argv):
     if FLAGS.dataset == "chest_xray":
         # Not really a builder, but it's compatible
         # TODO config
-        data_path = "H:/data/chest-xray"
+        data_path = "~/scratch/data"
         builder, info = chest_xray.XRayDataSet(data_path, config=None, train=True, return_tf_dataset=False)
         build_input_fn = partial(data_lib.build_chest_xray_fn, data_path)
         num_train_examples = info.get('num_examples')
         num_classes = info.get('num_classes')
         num_eval_examples = info.get('num_eval_classes')
     else:
-        builder = tfds.builder(FLAGS.dataset, data_dir=FLAGS.data_dir)
+        #builder = tfds.builder(FLAGS.dataset, data_dir=FLAGS.data_dir)
         builder.download_and_prepare()
         num_train_examples = builder.info.splits[FLAGS.train_split].num_examples
         num_eval_examples = builder.info.splits[FLAGS.eval_split].num_examples

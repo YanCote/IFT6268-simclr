@@ -8,7 +8,6 @@ import typing
 import random
 from tensorflow.python.ops import io_ops
 from tensorflow.python.ops import image_ops
-import tensorflow_datasets as tfds
 
 XR_LABELS = {
     'Atelectasis': 0,
@@ -117,7 +116,7 @@ class XRayDataSet(tf.data.Dataset):
             img_data_path = os.path.join(data_path, "images-224")
             data = PrepareData(img_data_path, dataframe, config, seed)
             dataset = tf.data.Dataset.from_tensor_slices( data )
-            return_data = dataset.map(load_img)
+            return_data = dataset.map(load_img, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         else:
             return_data = None
         return return_data, {"num_examples": num_examples, 
