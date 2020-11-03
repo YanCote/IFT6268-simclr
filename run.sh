@@ -3,8 +3,13 @@
 #SBATCH --gres=gpu:p100:2
 #SBATCH --cpus-per-task=8
 #SBATCH --account=def-bengioy
-#SBATCH --mem=16G
+#SBATCH --mem=20G
 
+echo 'Copying and unpacking dataset on local compute node...'
+tar -xf ~/scratch/data/images-224.tar -C $SLURM_TMPDIR
+cp ~/scratch/data/Data_Entry_2017.csv $SLURM_TMPDIR
+
+echo ''
 echo 'Starting task !'
 echo 'Load Modules Python !'
 # module load arch/avx512 StdEnv/2018.3
@@ -35,6 +40,6 @@ pip3 install --no-index h5py
 pip3 install --no-index pyYAML
 
 echo 'Calling python script'
-stdbuf -oL python -u simclr-master/run.py
+stdbuf -oL python -u simclr-master/run.py --local_tmp_folder $SLURM_TMPDIR
 # deactivate
 

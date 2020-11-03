@@ -43,6 +43,9 @@ import dataloaders.chest_xray as chest_xray
 
 FLAGS = flags.FLAGS
 
+flags.DEFINE_string(
+    'local_tmp_folder', "",
+    'The local computer temp dir path.')
 
 flags.DEFINE_float(
     'learning_rate', 0.3,
@@ -65,7 +68,7 @@ flags.DEFINE_float(
     'Batch norm decay parameter.')
 
 flags.DEFINE_integer(
-    'train_batch_size', 256,
+    'train_batch_size', 128,
     'Batch size for training.')
 
 flags.DEFINE_string(
@@ -73,7 +76,7 @@ flags.DEFINE_string(
     'Split for training.')
 
 flags.DEFINE_integer(
-    'train_epochs', 100,
+    'train_epochs', 300,
     'Number of epochs to train for.')
 
 flags.DEFINE_integer(
@@ -81,7 +84,7 @@ flags.DEFINE_integer(
     'Number of steps to train for. If provided, overrides train_epochs.')
 
 flags.DEFINE_integer(
-    'eval_batch_size', 256,
+    'eval_batch_size', 128,
     'Batch size for eval.')
 
 flags.DEFINE_integer(
@@ -365,7 +368,7 @@ def main(argv):
     if FLAGS.dataset == "chest_xray":
         # Not really a builder, but it's compatible
         # TODO config
-        data_path = "~/scratch/data"
+        data_path = FLAGS.local_tmp_folder
         builder, info = chest_xray.XRayDataSet(data_path, config=None, train=True, return_tf_dataset=False)
         build_input_fn = partial(data_lib.build_chest_xray_fn, data_path)
         num_train_examples = info.get('num_examples')
@@ -380,7 +383,7 @@ def main(argv):
         build_input_fn = data_lib.build_input_fn
 
     train_steps = model_util.get_train_steps(num_train_examples)
-    eval_steps = int(math.ceil(num_eval_examples / FLAGS.eval_batch_size))
+    #eval_steps = int(math.ceil(num_eval_examples / FLAGS.eval_batch_size))
     epoch_steps = int(round(num_train_examples / FLAGS.train_batch_size))
 
     resnet.BATCH_NORM_DECAY = FLAGS.batch_norm_decay
