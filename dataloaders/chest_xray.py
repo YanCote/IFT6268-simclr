@@ -20,11 +20,11 @@ XR_LABELS = {
     'Hernia': 7,
     'Infiltration': 8,
     'Mass': 9,
-    'No Finding': 10,
-    'Nodule': 11,
-    'Pleural_Thickening': 12,
-    'Pneumonia' : 13,
-    'Pneumothorax': 14,
+    'Nodule': 10,
+    'Pleural_Thickening': 11,
+    'Pneumonia' : 12,
+    'Pneumothorax': 13
+    # 'No Finding': 14
 }
 
 xray_n_class = len(XR_LABELS.keys())
@@ -65,7 +65,7 @@ def PrepareData(
         index_imgs[i] = os.path.join(img_data_path, index_imgs[i])
 
 
-    mlb = MultiLabelBinarizer()
+    mlb = MultiLabelBinarizer(classes = list(XR_LABELS.keys()))
     one_hot_labels = mlb.fit_transform(labels_split)
 
     # TODO change num classes
@@ -76,7 +76,7 @@ def PrepareData(
 class XRayDataSet(tf.data.Dataset):
     """
     Wrapper class for the NIH ChestRay Dataset: https://academictorrents.com/details/e615d3aebce373f1dc8bd9d11064da55bdadede0
-    it is a Multi-label(15) classification
+    it is a Multi-label(14) classification
 
     """
     def __new__(
