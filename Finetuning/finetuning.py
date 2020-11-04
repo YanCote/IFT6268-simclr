@@ -52,12 +52,13 @@ from datetime import datetime
 from functools import partial
 from tensorflow.python.client import device_lib
 import matplotlib.pyplot as plt
-import matplotlib
+import datetime
 import tensorflow_datasets as tfds
 import tensorflow_hub as hub
 import re
 import numpy as np
 import tensorflow as tf
+from pathlib import Path
 print(tf.__version__)
 tf.compat.v1.disable_eager_execution()
 # tf.compat.v1.disable_v2_behavior()
@@ -697,132 +698,169 @@ class LARSOptimizer(tf.compat.v1.train.Optimizer):
         return True
 
 
-with strategy.scope():
 
-    # @title Load tensorflow datasets: we use tensorflow flower dataset as an example
 
-    batch_size = yml_config['finetuning']['batch']
-    buffer_size = yml_config['finetuning']['buffer_size']
 
 
 if __name__ == "__main__":
 
-    # @title Load tensorflow datasets: we use tensorflow flower dataset as an example
-    dataset_name = 'chest_xray'
-    dataset_name = 'tf_flowers'
-    dataset_name = 'chest_xray'
+    with strategy.scope():
 
-    if dataset_name == 'tf_flowers':
-        train_dataset, tfds_info = tfds.load(dataset_name, split='train', with_info=True,
-                                            download=False, data_dir=yml_config['dataset']['flower_ts_data_path'])
-        num_images = tfds_info.splits['train'].num_examples
-        num_classes = tfds_info.features['label'].num_classes
+        current_time = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+        train_log_dir = str(Path.cwd() / 'logs' / current_time / 'train')
+        test_log_dir = str(Path.cwd() / 'logs/' /  current_time /  'test')
+        #train_summary_writer = tf.summary.create_file_writer(train_log_dir)
+        # test_summary_writer = tf.summary.create_file_writer(test_log_dir)
 
-    elif dataset_name == 'chest_xray':
-        data_path = yml_config['dataset']['chest_xray']
-        train_dataset, tfds_info = chest_xray.XRayDataSet(data_path, config=None, train=True)
-        num_images = tfds_info['num_examples']
-        num_classes = tfds_info['num_classes']
+        # @title Load tensorflow datasets: we use tensorflow flower dataset as an example
+        batch_size = yml_config['finetuning']['batch']
+        buffer_size = yml_config['finetuning']['buffer_size']
 
-    def _preprocess(x):
-        x['image'] = preprocess_image(
-            x['image'], 224, 224, is_training=False, color_distort=False)
-        return x
+        # @title Load tensorflow datasets: we use tensorflow flower dataset as an example
+        dataset_name = yml_config['finetuning']['data_src_type']
 
-    x_ds = train_dataset \
-            .map(_preprocess, #num_parallel_calls=tf.data.experimental.AUTOTUNE, # Not sure if map is optimal or not... 
-                    deterministic=False) \
+        if dataset_name == 'tf_flowers':
+            train_dataset, tfds_info = tfds.load(dataset_name, split='train', with_info=True,
+                                                download=False, data_dir=yml_config['dataset']['flower_ts_data_path'])
+            num_images = tfds_info.splits['train'].num_examples
+            num_classes = tfds_info.features['label'].num_classes
+
+        elif dataset_name == 'chest_xray':
+            data_path = yml_config['dataset']['chest_xray']
+            train_dataset, tfds_info = chest_xray.XRayDataSet(data_path, config=None, train=True)
+            num_images = np.floor(yml_config['finetuning']['train_data_ratio'] * tfds_info['num_examples'])
+            num_classes = tfds_info['num_classes']
+
+        print(f"Training: {num_images} images...")
+
+        def _preprocess(x):
+            x['image'] = preprocess_image(
+                x['image'], 224, 224, is_training=False, color_distort=False)
+            return x
+
+        x_ds = train_dataset \
+            .take(num_images) \
+            .map(_preprocess, deterministic=False) \
             .shuffle(buffer_size)\
             .batch(batch_size)\
-            .prefetch(tf.data.experimental.AUTOTUNE) 
-            
+            .prefetch(tf.data.experimental.AUTOTUNE)
 
 
-    x_iter = tf.compat.v1.data.make_one_shot_iterator(x_ds)
-    x_init = x_iter.make_initializer(x_ds)
-    x = x_iter.get_next()
+        x_iter = tf.compat.v1.data.make_one_shot_iterator(x_ds)
+        x_init = x_iter.make_initializer(x_ds)
+        x = x_iter.get_next()
 
-    print(f"{type(x)} {type(x['image'])} {x['image']} {x['label']}")
-    # @title Load module and construct the computation graph
-    learning_rate = yml_config['finetuning']['learning_rate']
-    momentum = yml_config['finetuning']['momentum']
-    weight_decay = yml_config['finetuning']['weight_decay']
-    epoch_save_step = yml_config['finetuning']['epoch_save_step']
-    load_ckpt = yml_config['finetuning'].get('load_ckpt')
+        print(f"{type(x)} {type(x['image'])} {x['image']} {x['label']}")
+        # @title Load module and construct the computation graph
+        learning_rate = yml_config['finetuning']['learning_rate']
+        momentum = yml_config['finetuning']['momentum']
+        weight_decay = yml_config['finetuning']['weight_decay']
+        epoch_save_step = yml_config['finetuning']['epoch_save_step']
+        load_ckpt = yml_config['finetuning'].get('load_ckpt')
 
-    # Load the base network and set it to non-trainable (for speedup fine-tuning)
-    # hub_path = 'gs://simclr-checkpoints/simclrv2/finetuned_100pct/r50_1x_sk0/hub/'
-    hub_path = os.path.abspath('./r50_1x_sk0/hub/')
-    #hub_path = yml_config['finetuning']['model_path']
-    module = hub.Module(hub_path, trainable=False)
-    key = module(inputs=x['image'], signature="default", as_dict=True)
+        # Load the base network and set it to non-trainable (for speedup fine-tuning)
+        hub_path = os.path.abspath('./r50_1x_sk0/hub/')
+        module = hub.Module(hub_path, trainable=True)
+        key = module(inputs=x['image'], signature="default", as_dict=True)
 
-    # Attach a trainable linear layer to adapt for the new task.
-    if dataset_name == 'tf_flowers':
-        with tf.compat.v1.variable_scope('head_supervised_new', reuse=tf.compat.v1.AUTO_REUSE):
-            logits_t = tf.compat.v1.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
-        loss_t = tf.reduce_mean(input_tensor=tf.nn.softmax_cross_entropy_with_logits(
-            labels=tf.one_hot(x['label'], num_classes), logits=logits_t))
-    elif dataset_name == 'chest_xray':
-        with tf.compat.v1.variable_scope('head_supervised_new', reuse=tf.compat.v1.AUTO_REUSE):
-            logits_t = tf.compat.v1.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
-            loss_t = tf.reduce_mean(input_tensor=tf.nn.sigmoid_cross_entropy_with_logits(
-            #loss_t = tf.reduce_mean(input_tensor=tf.nn.softmax_cross_entropy_with_logits(
-            labels=tf.convert_to_tensor(value=x['label']), logits=logits_t))
-            #labels=tf.one_hot(x['label'], num_classes), logits=logits_t))
+        # Attach a trainable linear layer to adapt for the new task.
+        if dataset_name == 'tf_flowers':
+            with tf.compat.v1.variable_scope('head_supervised_new', reuse=tf.compat.v1.AUTO_REUSE):
+                logits_t = tf.compat.v1.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
+            loss_t = tf.reduce_mean(input_tensor=tf.nn.softmax_cross_entropy_with_logits(
+                labels=tf.one_hot(x['label'], num_classes), logits=logits_t))
+        elif dataset_name == 'chest_xray':
+            with tf.compat.v1.variable_scope('head_supervised_new', reuse=tf.compat.v1.AUTO_REUSE):
+                logits_t = tf.compat.v1.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
+                # loss_t = tf.reduce_mean(input_tensor=tf.nn.sigmoid_cross_entropy_with_logits(
+                # labels=tf.convert_to_tensor(value=x['label']), logits=logits_t))
+                cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(labels=x['label'], logits=logits_t)
+                loss_t = tf.reduce_mean(tf.reduce_sum(cross_entropy, axis=1))
 
 
-    # Setup optimizer and training op.
-    optimizer = LARSOptimizer(
-        learning_rate,
-        momentum=momentum,
-        weight_decay=weight_decay,
-        exclude_from_weight_decay=['batch_normalization', 'bias', 'head_supervised'])
-    variables_to_train = tf.compat.v1.trainable_variables()
-    train_op = optimizer.minimize(
-        loss_t, global_step=tf.compat.v1.train.get_or_create_global_step(),
-        var_list=variables_to_train)
+        # Setup optimizer and training op.
+        optimizer = LARSOptimizer(
+            learning_rate,
+            momentum=momentum,
+            weight_decay=weight_decay,
+            exclude_from_weight_decay=['batch_normalization', 'bias', 'head_supervised'])
+        variables_to_train = tf.compat.v1.trainable_variables()
+        train_op = optimizer.minimize(
+            loss_t, global_step=tf.compat.v1.train.get_or_create_global_step(),
+            var_list=variables_to_train)
 
-    print('Variables to train:', variables_to_train)
-    key  # The accessible tensor in the return dictionary
+        print('Variables to train:', variables_to_train)
+        key  # The accessible tensor in the return dictionary
 
-    # Add ops to save and restore all the variables.
-    sess = tf.compat.v1.Session()
-    ckpt = tf.compat.v1.train.Saver()
-    current_time = datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
-    directory = os.path.join(os.path.abspath('./output'), current_time)
-    is_time_to_save_session = partial(model_ckpt.save_session, epoch_save_step, ckpt, output=directory)
-    if load_ckpt is not None:
-        ckpt.restore(sess, load_ckpt)
-    else:
-        sess.run(tf.compat.v1.global_variables_initializer())
+        # Add ops to save and restore all the variables.
+        sess = tf.compat.v1.Session()
+        ckpt = tf.compat.v1.train.Saver()
+        current_time = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+        directory = os.path.join(os.path.abspath('./output'), current_time)
+        is_time_to_save_session = partial(model_ckpt.save_session, epoch_save_step, ckpt, output=directory)
+        if load_ckpt is not None:
+            ckpt.restore(sess, load_ckpt)
+        else:
+            sess.run(tf.compat.v1.global_variables_initializer())
 
-    # @title We fine-tune the new *linear layer* for just a few iterations.
-    total_iterations = yml_config['finetuning']['epochs']
-    for it in range(total_iterations):
-        # Init dataset iterator        
-        sess.run(x_init)
+        # @title We fine-tune the new *linear layer* for just a few iterations.
+        epochs = yml_config['finetuning']['epochs']
 
-        tot_loss = 0
-        for _ in range(round(num_images / batch_size)):
-            _, loss, image, logits, labels = sess.run(fetches=(train_op, loss_t, x['image'], logits_t, x['label']))
-            pred = logits.argmax(-1)
-            correct = np.sum(pred == labels)
-            total = labels.size
-            tot_loss += loss
-            print("[Iter {}] Total Loss: {} Loss: {} Top 1: {}".format(it + 1, tot_loss, loss, correct / float(total)))
-        print("[Iter {}] Total Loss: {} Loss: {} Top 1: {}".format(it+1, tot_loss, loss , correct/float(total)))
+        # train_summary_writer = tf.summary.FileWriter('./logs/train ', sess.graph)
+        # train_summary_writer = tf.summary.create_file_writer(train_log_dir)
+        # train_summary_writer.as_default()
+        writer = tf.compat.v1.summary.FileWriter('./log')
 
-        # Is it time to save the session?
-        is_time_to_save_session(it, sess)
+        verbose_train_loop = 1
+        np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
+        with sess.as_default():
+            for it in range(epochs):
+                # Init dataset iterator
+                sess.run(x_init)
+                tot_loss = 0
+                tot_loss = 0
+                for bnum in range(round(num_images / batch_size)):
+                    _, loss, image, logits, labels = sess.run(fetches=(train_op, loss_t, x['image'], logits_t, x['label']))
+                    tot_loss += loss
+                    if dataset_name == 'tf_flowers':
+                        pred = logits.argmax(-1)
+                        correct = np.sum(pred == labels)
+                        acc_per_class = np.array([correct / float(batch_size)])
+                    elif dataset_name == 'chest_xray':
+                        #pred = np.where(logits > yml_config['finetuning']['multi_label_threshold'], 1, 0)
+                        # pred = tf.sigmoid(logits)
+                        # pred = tf.cast(prediction > yml_config['finetuning']['multi_label_threshold'], tf.int32)
+                        #correct = np.sum(np.all(pred == labels, axis=1))
+                        pred = tf.cast(tf.sigmoid(logits) > 0.5 , tf.float32)
+                        acc_per_class = (tf.math.reduce_sum(tf.cast(tf.equal(pred,labels),tf.float32),axis=0) / float(batch_size)).eval()
+                        if verbose_train_loop:
+                            print(f" {logits[1]} \n {pred[1].eval()} \n {labels[1]}\n ")
 
-    # @title Plot the images and predictions
-    fig, axes=plt.subplots(5, 1, figsize=(15, 15))
-    for i in range(5):
-        axes[i].imshow(image[i])
-        true_text=chest_xray.XR_LABELS[labels[i]]
-        pred_text=chest_xray.XR_LABELS[pred[i]]
-        axes[i].axis('off')
-        axes[i].text(256, 128, 'Truth: ' + true_text + '\n' + 'Pred: ' + pred_text)
+                    tf.math.reduce_sum(tf.cast(tf.equal(pred, labels), tf.int32), axis=0)
+                    # with train_summary_writer.as_default():
+                    # tf.summary.scalar('Total loss', tot_loss, step=epochs)
+                    # for i,c in enumerate(acc_per_class):
+                    #     tf.summary.scalar(f"accuracy class {i}", c , step=epochs)
+                    writer = tf.compat.v1.summary.FileWriter('tflogs', sess.graph)
 
-    plt.show()
+                    print(f"[Epoch {it + 1} Iter {bnum}] Total Loss: {tot_loss} Loss: {loss} avg Acc: {np.average(acc_per_class):.2f}")
+                    # if verbose_train_loop:
+                    #     print(f"Acc per class: \n {acc_per_class}")
+
+
+                # Is it time to save the session?
+                is_time_to_save_session(it, sess)
+
+            writer.flush()  # make sure everything is written to disk
+            writer.close()
+
+            # # @title Plot the images and predictions
+            # fig, axes=plt.subplots(5, 1, figsize=(15, 15))
+            # for i in range(5):
+            #     axes[i].imshow(image[i])
+            #     true_text=chest_xray.XR_LABELS[labels[i]]
+            #     pred_text=chest_xray.XR_LABELS[pred[i]]
+            #     axes[i].axis('off')
+            #     axes[i].text(256, 128, 'Truth: ' + true_text + '\n' + 'Pred: ' + pred_text)
+
+            # plt.show()
