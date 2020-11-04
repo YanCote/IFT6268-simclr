@@ -105,7 +105,7 @@ def pad_to_batch(dataset, batch_size):
 
     return dataset.map(_pad_to_batch)
 
-def build_chest_xray_fn(data_path, _, is_training):
+def build_chest_xray_fn(use_multi_gpus, data_path, _, is_training):
     def _input_fn(params):
         """Inner input function."""
         preprocess_fn_pretrain = get_preprocess_fn(
@@ -125,8 +125,11 @@ def build_chest_xray_fn(data_path, _, is_training):
             else:
                 image = preprocess_fn_finetune(image)
             return image, label, 1.0
+        
+        def map_fn2(image, label, mask):
+            return (image, {'labels':label, 'mask':mask})
 
-        dataset, info = chest_xray.XRayDataSet(data_path, config=None, train=is_training)
+        dataset, info = chest_xray.XRayDataSet(data_path, config=None, train=is_training, split=0.05)
         if FLAGS.cache_dataset:
             dataset = dataset.cache()
         if is_training:
@@ -137,11 +140,16 @@ def build_chest_xray_fn(data_path, _, is_training):
                               num_parallel_calls=tf.data.experimental.AUTOTUNE)
         dataset = dataset.batch(
             params['batch_size'], drop_remainder=is_training)
-        dataset = pad_to_batch(dataset, params['batch_size'])
-        images, labels, mask = tf.data.make_one_shot_iterator(
-            dataset).get_next()
 
-        return images, {'labels': labels, 'mask': mask}
+        if use_multi_gpus:
+            dataset = pad_to_batch(dataset, params['batch_size'])
+            dataset = dataset.map(map_fn2,
+                        num_parallel_calls=tf.data.experimental.AUTOTUNE)
+            return dataset
+        else:
+            images, labels, mask = tf.data.make_one_shot_iterator(
+                dataset).get_next()
+            return images, {'labels': labels, 'mask': mask}
     return _input_fn
 
 def build_input_fn(builder, is_training):

@@ -42,7 +42,7 @@ def build_model_fn(model, num_classes, num_train_examples):
             num_transforms = 2
             if FLAGS.fine_tune_after_block > -1:
                 raise ValueError('Does not support layer freezing during pretraining,'
-                                 'should set fine_tune_after_block<=-1 for safety.')
+                                'should set fine_tune_after_block<=-1 for safety.')
         elif FLAGS.train_mode == 'finetune':
             num_transforms = 1
         else:
@@ -76,7 +76,7 @@ def build_model_fn(model, num_classes, num_train_examples):
                 hidden_norm=FLAGS.hidden_norm,
                 temperature=FLAGS.temperature,
                 tpu_context=tpu_context if is_training else None)
-            logits_sup = tf.zeros([params['batch_size'], num_classes])
+            logits_sup = tf.zeros([2, num_classes]) # we don't need this when pretrainning
         else:
             contrast_loss = tf.zeros([])
             logits_con = tf.zeros([params['batch_size'], 10])
@@ -126,7 +126,7 @@ def build_model_fn(model, num_classes, num_train_examples):
                     with summary_writer.as_default():
                         should_record = tf.math.equal(
                             tf.math.floormod(tf.train.get_global_step(),
-                                             FLAGS.train_summary_steps), 0)
+                                            FLAGS.train_summary_steps), 0)
                         with tf2.summary.record_if(should_record):
                             contrast_acc = tf.equal(
                                 tf.argmax(labels_con, 1), tf.argmax(logits_con, axis=1))
@@ -171,7 +171,7 @@ def build_model_fn(model, num_classes, num_train_examples):
                     tf.train.init_from_checkpoint(
                         FLAGS.checkpoint,
                         {v.op.name: v.op.name
-                         for v in tf.global_variables(FLAGS.variable_schema)})
+                        for v in tf.global_variables(FLAGS.variable_schema)})
 
                     if FLAGS.zero_init_logits_layer:
                         # Init op that initializes output layer parameters to zeros.
@@ -195,10 +195,10 @@ def build_model_fn(model, num_classes, num_train_examples):
         else:
 
             def metric_fn(logits_sup, labels_sup, logits_con, labels_con, mask,
-                          **kws):
+                        **kws):
                 """Inner metric function."""
                 metrics = {k: tf.metrics.mean(v, weights=mask)
-                           for k, v in kws.items()}
+                        for k, v in kws.items()}
                 metrics['label_top_1_accuracy'] = tf.metrics.accuracy(
                     tf.argmax(labels_sup, 1), tf.argmax(logits_sup, axis=1),
                     weights=mask)
@@ -219,7 +219,7 @@ def build_model_fn(model, num_classes, num_train_examples):
                 'mask': labels['mask'],
                 'contrast_loss': tf.fill((params['batch_size'],), contrast_loss),
                 'regularization_loss': tf.fill((params['batch_size'],),
-                                               tf.losses.get_regularization_loss()),
+                                            tf.losses.get_regularization_loss()),
             }
 
             return tf.estimator.tpu.TPUEstimatorSpec(

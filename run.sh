@@ -16,6 +16,7 @@ echo 'Load Modules Python !'
 # nvidia-smi
 module load python/3.7
 module load scipy-stack
+module load nccl
 #module load cuda cudnn
 
 echo 'Creating VENV'
