@@ -703,88 +703,25 @@ from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import nn_ops
 from tensorflow.python.framework import ops
 
-def sigmoid_cross_entropy_with_logits(  # pylint: disable=invalid-name
-    _sentinel=None,
-    labels=None,
-    logits=None,
-    name=None):
-  """Computes sigmoid cross entropy given `logits`.
-  Measures the probability error in discrete classification tasks in which each
-  class is independent and not mutually exclusive.  For instance, one could
-  perform multilabel classification where a picture can contain both an elephant
-  and a dog at the same time.
-  For brevity, let `x = logits`, `z = labels`.  The logistic loss is
-        z * -log(sigmoid(x)) + (1 - z) * -log(1 - sigmoid(x))
-      = z * -log(1 / (1 + exp(-x))) + (1 - z) * -log(exp(-x) / (1 + exp(-x)))
-      = z * log(1 + exp(-x)) + (1 - z) * (-log(exp(-x)) + log(1 + exp(-x)))
-      = z * log(1 + exp(-x)) + (1 - z) * (x + log(1 + exp(-x))
-      = (1 - z) * x + log(1 + exp(-x))
-      = x - x * z + log(1 + exp(-x))
-  For x < 0, to avoid overflow in exp(-x), we reformulate the above
-        x - x * z + log(1 + exp(-x))
-      = log(exp(x)) - x * z + log(1 + exp(-x))
-      = - x * z + log(1 + exp(x))
-  Hence, to ensure stability and avoid overflow, the implementation uses this
-  equivalent formulation
-      max(x, 0) - x * z + log(1 + exp(-abs(x)))
-  `logits` and `labels` must have the same type and shape.
-  Args:
-    _sentinel: Used to prevent positional parameters. Internal, do not use.
-    labels: A `Tensor` of the same type and shape as `logits`.
-    logits: A `Tensor` of type `float32` or `float64`.
-    name: A name for the operation (optional).
-  Returns:
-    A `Tensor` of the same shape as `logits` with the componentwise
-    logistic losses.
-  Raises:
-    ValueError: If `logits` and `labels` do not have the same shape.
-  """
-  # pylint: disable=protected-access
-  nn_ops._ensure_xent_args("sigmoid_cross_entropy_with_logits", _sentinel,
-                           labels, logits)
-  # pylint: enable=protected-access
-
-  with ops.name_scope(name, "logistic_loss", [logits, labels]) as name:
-    logits = ops.convert_to_tensor(logits, name="logits")
-    labels = ops.convert_to_tensor(labels, name="labels")
-    try:
-      labels.get_shape().merge_with(logits.get_shape())
-    except ValueError:
-      raise ValueError("logits and labels must have the same shape (%s vs %s)" %
-                       (logits.get_shape(), labels.get_shape()))
-
-    # The logistic loss formula from above is
-    #   x - x * z + log(1 + exp(-x))
-    # For x < 0, a more numerically stable formula is
-    #   -x * z + log(1 + exp(x))
-    # Note that these two expressions can be combined into the following:
-    #   max(x, 0) - x * z + log(1 + exp(-abs(x)))
-    # To allow computing gradients at zero, we define custom versions of max and
-    # abs functions.
-    zeros = array_ops.zeros_like(logits, dtype=logits.dtype)
-    cond = (logits >= zeros)
-    relu_logits = array_ops.where(cond, logits, zeros)
-    neg_abs_logits = array_ops.where(cond, -logits, logits)
-    return math_ops.add(
-        relu_logits - logits * labels,
-        math_ops.log1p(math_ops.exp(neg_abs_logits)),
-        name=name)
 
 def weighted_cel(
     _sentinel=None,
     labels=None,
     logits=None,
     name=None):
-  """Computes sigmoid cross entropy given `logits`.
-  Measures the probability error in discrete classification tasks in which each
-  class is independent and not mutually exclusive.  For instance, one could
-  perform multilabel classification where a picture can contain both an elephant
-  and a dog at the same time.
+  """
+  Inspired strongly by tensorflow :sigmoid_cross_entropy_with_logits
+  https://github.com/tensorflow/tensorflow/blob/v2.3.1/tensorflow/python/ops/nn_impl.py#L196-L244
+
+  Version with weighted CEL(Cross-Entropy Loss)
+  https://arxiv.org/pdf/1705.02315
+
+  Starting from CEL from TF
   For brevity, let `x = logits`, `z = labels`.  The logistic loss is
         z * -log(sigmoid(x)) + (1 - z) * -log(1 - sigmoid(x))
       = z * -log(1 / (1 + exp(-x))) + (1 - z) * -log(exp(-x) / (1 + exp(-x)))
       = z * log(1 + exp(-x)) + (1 - z) * (-log(exp(-x)) + log(1 + exp(-x)))
-      = z * log(1 + exp(-x)) + (1 - z) * (x + log(1 + exp(-x))
+      = z * log(1 + exp(-x)) + (1 - z) * (x + log(1 + exp(-x))                   (4)
       = (1 - z) * x + log(1 + exp(-x))
       = x - x * z + log(1 + exp(-x))
   For x < 0, to avoid overflow in exp(-x), we reformulate the above
@@ -794,7 +731,17 @@ def weighted_cel(
   Hence, to ensure stability and avoid overflow, the implementation uses this
   equivalent formulation
       max(x, 0) - x * z + log(1 + exp(-abs(x)))
-  `logits` and `labels` must have the same type and shape.
+
+  weighted CEL:
+  For x > 0 (from (4)):
+   = B_p * [z * -log( 1 + exp(-x) )] + B_n * [(1 - z) * (x + log(1 + exp(-x)))]
+  For x < 0 (from (4)):
+   = B_p * [z * log( exp(x) / (1 + exp(x)) )] + B_n * [(1 - z) *(x + log( exp(x) / (1 + exp(x))))]
+   = B_p * [z * log(1 + exp(x)) - x] + B_n * [(1 - z) * log( (1 + exp(x))))]
+  Hence, to ensure stability and avoid overflow, the implementation uses this
+  equivalent formulation
+   = B_p * [z * log(1 + exp(-x)) + min(0,x) ] + B_n * [(1 - z) * (max(0,x) + log( (1 + exp(-x)))))]
+
   Args:
     _sentinel: Used to prevent positional parameters. Internal, do not use.
     labels: A `Tensor` of the same type and shape as `logits`.
@@ -822,23 +769,11 @@ def weighted_cel(
     cnt_zero = tf.cast(tf.size(logits),tf.float32) - cnt_one
     beta_p = (cnt_one + cnt_zero) / cnt_one
     beta_n = (cnt_one + cnt_zero) / cnt_zero
-    # The logistic loss formula from above is
-    #   x - x * z + log(1 + exp(-x))
-    # For x < 0, a more numerically stable formula is
-    #   -x * z + log(1 + exp(x))
-    # Note that these two expressions can be combined into the following:
-    #   max(x, 0) - x * z + log(1 + exp(-abs(x)))
-    # To allow computing gradients at zero, we define custom versions of max and
-    # abs functions.
     zeros = array_ops.zeros_like(logits, dtype=logits.dtype)
     cond = (logits >= zeros)
     relu_logits = array_ops.where(cond, logits, zeros)
     not_relu_logits = array_ops.where(cond, zeros, logits)
     neg_abs_logits = array_ops.where(cond, -logits, logits)
-    # return math_ops.add(
-    #     relu_logits - logits * labels,
-    #     math_ops.log1p(math_ops.exp(neg_abs_logits)),
-    #     name=name)
     A = beta_p * (labels * (math_ops.log1p(1 + math_ops.exp(-logits))  + not_relu_logits))
     B = beta_n * ((1-labels) * (relu_logits + math_ops.log1p(1 + math_ops.exp(-logits))))
     return math_ops.add(A, B, name=name)
@@ -850,20 +785,12 @@ def test_weighted_cel():
         logits = tf.random.uniform([b, c], minval=-1, maxval=1)
         labels = tf.cast(tf.random.uniform([b, c], minval=-1, maxval=1) > 0, tf.float32)
         loss = weighted_cel(labels=labels, logits=logits)
-        pass
+
 
 
 if __name__ == "__main__":
 
     with strategy.scope():
-
-
-
-        current_time = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-        train_log_dir = str(Path.cwd() / 'logs' / current_time / 'train')
-        test_log_dir = str(Path.cwd() / 'logs/' /  current_time /  'test')
-        #train_summary_writer = tf.summary.create_file_writer(train_log_dir)
-        # test_summary_writer = tf.summary.create_file_writer(test_log_dir)
 
         # @title Load tensorflow datasets: we use tensorflow flower dataset as an example
         batch_size = yml_config['finetuning']['batch']
@@ -925,8 +852,6 @@ if __name__ == "__main__":
         elif dataset_name == 'chest_xray':
             with tf.compat.v1.variable_scope('head_supervised_new', reuse=tf.compat.v1.AUTO_REUSE):
                 logits_t = tf.compat.v1.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
-                # loss_t = tf.reduce_mean(input_tensor=tf.nn.sigmoid_cross_entropy_with_logits(
-                # labels=tf.convert_to_tensor(value=x['label']), logits=logits_t))
                 cross_entropy = weighted_cel(labels=x['label'], logits=logits_t)
                 #cross_entropy = sigmoid_cross_entropy_with_logits(labels=x['label'], logits=logits_t)
                 loss_t = tf.reduce_mean(tf.reduce_sum(cross_entropy, axis=1))
@@ -960,23 +885,27 @@ if __name__ == "__main__":
         # @title We fine-tune the new *linear layer* for just a few iterations.
         epochs = yml_config['finetuning']['epochs']
 
-        # train_summary_writer = tf.summary.FileWriter('./logs/train ', sess.graph)
-        # train_summary_writer = tf.compat.v1.summary.create_file_writer('./logs')
-        # train_summary_writer.as_default()
-        # writer = tf.compat.v1.summary.FileWriter('./log')
+        with tf.name_scope('performance'):
+            current_time = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+            # train_log_dir = str(Path.cwd() / 'logs' / current_time / 'train')
+            tot_loss = tf.zeros([])
+            tot_acc = tf.zeros([])
+            tf_tot_acc_ph = tf.compat.v1.placeholder(tf.float32, shape=None, name='accuracy')
+            tf_tot_acc_summary = tf.compat.v1.summary.scalar('accuracy', tf_tot_acc_ph)
+            tf_tot_loss_ph = tf.compat.v1.placeholder(tf.float32, shape=None, name='loss')
+            tf_tot_loss_summary = tf.compat.v1.summary.scalar('loss', tf_tot_loss_ph)
+            performance_summaries = tf.compat.v1.summary.merge([tf_tot_acc_summary,tf_tot_loss_summary])
+            summ_writer = tf.compat.v1.compat.v1.summary.FileWriter(Path('logs') / current_time, sess.graph)
 
-        # acc = 0
-        # acc_summary = tf.compat.v1.summary.scalar(name='My_first_scalar_summary', tensor=acc)
 
-        verbose_train_loop = 1
+        verbose_train_loop = 0
         np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
         with sess.as_default():
             writer = tf.compat.v1.summary.FileWriter('./log', sess.graph)
             for it in range(epochs):
                 # Init dataset iterator
                 sess.run(x_init)
-                tot_loss = 0
-                tot_acc = 0
+
                 for step in range(round(num_images / batch_size)):
                     _, loss, image, logits, labels = sess.run(fetches=(train_op, loss_t, x['image'], logits_t, x['label']))
                     tot_loss += loss
@@ -985,44 +914,29 @@ if __name__ == "__main__":
                         correct = np.sum(pred == labels)
                         acc_per_class = np.array([correct / float(batch_size)])
                     elif dataset_name == 'chest_xray':
-                        #pred = np.where(logits > yml_config['finetuning']['multi_label_threshold'], 1, 0)
-                        # pred = tf.sigmoid(logits)
-                        # pred = tf.cast(prediction > yml_config['finetuning']['multi_label_threshold'], tf.int32)
-                        #correct = np.sum(np.all(pred == labels, axis=1))
-                        #pred = tf.cast(tf.sigmoid(logits) > 0.5 , tf.float32)
                         pred = tf.cast(logits > 0.5, tf.float32)
                         acc = tf.reduce_mean(tf.reduce_min(tf.cast(tf.equal(pred, labels), tf.float32),axis=1))
                         tot_acc += acc
-                        # writer.add_summary(acc, step)
-                        # acc_per_class = (tf.math.reduce_sum(tf.cast(tf.equal(pred,labels),tf.float32),axis=0) / float(batch_size)).eval()
                         if verbose_train_loop:
                             print(f" {logits[1]} \n {pred[1].eval()} \n {labels[1]}\n ")
 
-                    # tf.math.reduce_sum(tf.cast(tf.equal(pred, labels), tf.int32), axis=0)
-                    # with train_summary_writer.as_default():
-                    # tf.summary.scalar('Total loss', tot_loss, step=epochs)
-                    # for i,c in enumerate(acc_per_class):
-                    #     tf.summary.scalar(f"accuracy class {i}", c , step=epochs)
 
-
-                    print(f"[Epoch {it + 1} Iter {step}] Total Loss: {tot_loss} Loss: {loss} avg Acc: {acc.eval()}")
+                    print(f"[Epoch {it + 1} Iter {step}] Total Loss: {tot_loss} Loss: {loss} Batch Acc: {acc.eval()}")
                     # if verbose_train_loop:
                     #     print(f"Acc per class: \n {acc_per_class}")
 
-                print(f"[Epoch {it + 1} Iter {step}] Total Loss: {tot_loss} Loss: {loss} Epoch Acc: {(tot_acc/round(num_images / batch_size)).eval()}")
+                epoch_acc = (tot_acc/batch_size)
+                print(f"[Epoch {it + 1} Loss: {tot_loss.eval()} Training Accuracy: {epoch_acc.eval()}")
                 # Is it time to save the session?
                 is_time_to_save_session(it, sess)
 
-            writer.flush()  # make sure everything is written to disk
-            writer.close()
 
-            # # @title Plot the images and predictions
-            # fig, axes=plt.subplots(5, 1, figsize=(15, 15))
-            # for i in range(5):
-            #     axes[i].imshow(image[i])
-            #     true_text=chest_xray.XR_LABELS[labels[i]]
-            #     pred_text=chest_xray.XR_LABELS[pred[i]]
-            #     axes[i].axis('off')
-            #     axes[i].text(256, 128, 'Truth: ' + true_text + '\n' + 'Pred: ' + pred_text)
+                # ===================== Write Tensorboard summary ===============================
+                # Execute the summaries defined above
+                summ = sess.run(performance_summaries, feed_dict={tf_tot_acc_ph: epoch_acc.eval(), tf_tot_loss_ph: tot_loss.eval()})
 
-            # plt.show()
+
+                # Write the obtained summaries to the file, so it can be displayed in the TensorBoard
+                summ_writer.add_summary(summ, it)
+
+            # ====================== Calculate the Validation Accuracy ==========================
