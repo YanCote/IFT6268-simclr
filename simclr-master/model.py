@@ -31,7 +31,7 @@ import tensorflow.compat.v2 as tf2
 FLAGS = flags.FLAGS
 
 
-def build_model_fn(model, num_classes, num_train_examples):
+def build_model_fn(model, num_classes, num_train_examples, batch_size):
     """Build model function."""
     def model_fn(features, labels, mode, params=None):
         """Build model and optimizer."""
@@ -76,7 +76,7 @@ def build_model_fn(model, num_classes, num_train_examples):
                 hidden_norm=FLAGS.hidden_norm,
                 temperature=FLAGS.temperature,
                 tpu_context=tpu_context if is_training else None)
-            logits_sup = tf.zeros([2, num_classes]) # we don't need this when pretrainning
+            logits_sup = tf.zeros([batch_size, num_classes]) # we don't need this when pretrainning
         else:
             contrast_loss = tf.zeros([])
             logits_con = tf.zeros([params['batch_size'], 10])

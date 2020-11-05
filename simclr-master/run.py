@@ -47,7 +47,7 @@ flags.DEFINE_string(
     'local_tmp_folder', "",
     'The local computer temp dir path.')
 
-flags.DEFINE_bool(
+flags.DEFINE_boolean(
     'use_multi_gpus', False,
     'Is there multiple GPUs on the compute node')
 
@@ -151,7 +151,7 @@ flags.DEFINE_string(
 
 current_time = datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
 flags.DEFINE_string(
-    'model_dir', "~/scratch/runs/pretrain-simclr/{0}".format(current_time),
+    'model_dir', "/scratch/maruel/runs/pretrain-simclr/{0}".format(current_time), # ~ on cluster does not map at the same place
     'Model directory for training.')
 
 flags.DEFINE_string(
@@ -364,6 +364,10 @@ def main(argv):
     if len(argv) > 1:
         raise app.UsageError('Too many command-line arguments.')
 
+    if not os.path.exists(FLAGS.model_dir):
+        os.makedirs(FLAGS.model_dir)
+        print("Created directory: {0}".format(os.path.abspath(FLAGS.model_dir)))
+
     # Enable training summary.
     if FLAGS.train_summary_steps > 0:
         tf.config.set_soft_device_placement(True)
@@ -425,6 +429,8 @@ def main(argv):
             tf.tpu.experimental.initialize_tpu_system(cluster)
 
     strategy = tf.distribute.MirroredStrategy() if not FLAGS.use_tpu and FLAGS.use_multi_gpus else None # Multi GPU?
+    print("use_multi_gpus: {0}".format(FLAGS.use_multi_gpus))
+    print("use MirroredStrategy: {0}".format(not FLAGS.use_tpu and FLAGS.use_multi_gpus))
     default_eval_mode = tf.estimator.tpu.InputPipelineConfig.PER_HOST_V1
     sliced_eval_mode = tf.estimator.tpu.InputPipelineConfig.SLICED
     run_config = tf.estimator.tpu.RunConfig(
@@ -441,7 +447,7 @@ def main(argv):
         master=FLAGS.master,
         cluster=cluster)
     estimator = tf.estimator.tpu.TPUEstimator(
-        model_lib.build_model_fn(model, num_classes, num_train_examples),
+        model_lib.build_model_fn(model, num_classes, num_train_examples, FLAGS.train_batch_size),
         config=run_config,
         train_batch_size=FLAGS.train_batch_size,
         eval_batch_size=FLAGS.eval_batch_size,
@@ -449,8 +455,7 @@ def main(argv):
         
 
     # save flags for this experiment
-    if not os.path.exists(FLAGS.model_dir):
-        os.makedirs(FLAGS.model_dir)
+    
     FLAGS.append_flags_into_file(os.path.join(FLAGS.model_dir, 'experiment_flags.txt'))
 
     # Train/Eval

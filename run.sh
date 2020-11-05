@@ -16,7 +16,6 @@ echo 'Load Modules Python !'
 # nvidia-smi
 module load python/3.7
 module load scipy-stack
-module load nccl
 #module load cuda cudnn
 
 echo 'Creating VENV'
@@ -41,6 +40,7 @@ pip3 install --no-index h5py
 pip3 install --no-index pyYAML
 
 echo 'Calling python script'
-stdbuf -oL python -u simclr-master/run.py --local_tmp_folder $SLURM_TMPDIR
+dt=$(date '+%d-%m-%Y-%H-%M-%S');
+stdbuf -oL python -u simclr-master/run.py --local_tmp_folder $SLURM_TMPDIR --train_batch_size 32 --eval_batch_size 32 --use_multi_gpus --optimizer adam --model_dir /scratch/maruel/runs/pretrain-simclr/$dt
 # deactivate
 
