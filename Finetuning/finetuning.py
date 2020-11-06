@@ -68,6 +68,8 @@ tf.compat.v1.disable_eager_execution()
 parser = argparse.ArgumentParser(description='Finetuning on SimClrv2')
 parser.add_argument('--config', '-c', default='finetuning.yml', required=False,
                    help='yml configuration file')
+parser.add_argument('--xray_path', default='', required=False,
+                    help='yml configuration file')
 args = parser.parse_args()
 
 # Yaml configuration files
@@ -807,6 +809,7 @@ if __name__ == "__main__":
 
         elif dataset_name == 'chest_xray':
             data_path = yml_config['dataset']['chest_xray']
+            data_path = args.xray_path
             train_dataset, tfds_info = chest_xray.XRayDataSet(data_path, config=None, train=True)
             num_images = np.floor(yml_config['finetuning']['train_data_ratio'] * tfds_info['num_examples'])
             num_classes = tfds_info['num_classes']
@@ -840,6 +843,7 @@ if __name__ == "__main__":
 
         # Load the base network and set it to non-trainable (for speedup fine-tuning)
         hub_path = os.path.abspath('./r50_1x_sk0/hub/')
+        hub_path = yml_config['finetuning']['model_path']
         module = hub.Module(hub_path, trainable=yml_config['finetuning']['train_resnet'])
         key = module(inputs=x['image'], signature="default", as_dict=True)
 
@@ -906,7 +910,7 @@ if __name__ == "__main__":
                 # Init dataset iterator
                 sess.run(x_init)
 
-                for step in range(round(num_images / batch_size)):
+                for step in range(int(num_images / batch_size)):
                     _, loss, image, logits, labels = sess.run(fetches=(train_op, loss_t, x['image'], logits_t, x['label']))
                     tot_loss += loss
                     if dataset_name == 'tf_flowers':

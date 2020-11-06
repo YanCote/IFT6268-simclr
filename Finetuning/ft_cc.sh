@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --time=00:40:00
+#SBATCH --time=10:00:00
 #SBATCH --gres=gpu:2
 #SBATCH --cpus-per-task=1
 #SBATCH --account=def-bengioy
@@ -10,8 +10,8 @@
 echo 'Copying and unpacking dataset on local compute node...'
 tar -xf ~/scratch/data/images-224.tar -C $SLURM_TMPDIR
 echo 'Copying Data_Entry_2017.csv ...'
-cp ~/scratch/data/Data_Entry_2017.csv $SLURM_TMPDIR
-
+cp -v ~/scratch/data/Data_Entry_2017.csv $SLURM_TMPDIR
+                                          
 
 echo 'List1'
 ls -l -d ~/scratch/*/
@@ -61,5 +61,5 @@ pip3 install --no-index ~/python_packages/tensorflow-datasets/zipp-3.4.0-py3-non
 pip3 install --no-index ~/python_packages/tensorflow-datasets/tensorflow_datasets-4.0.1-py3-none-any.whl
 
 echo 'Calling python script'
-stdbuf -oL python -u ./Finetuning/finetuning.py --config ./Finetuning/finetuning.yml
+stdbuf -oL python -u ./Finetuning/finetuning.py --config ./Finetuning/finetuning.yml --xray_path $SLURM_TMPDIR
 # deactivate
