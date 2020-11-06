@@ -97,11 +97,11 @@ else:  # use default strategy
 
 imagenet_int_to_str = {}
 
-with open('./ilsvrc2012_wordnet_lemmas.txt', 'r') as f:
-    for i in range(1000):
-        row = f.readline()
-        row = row.rstrip()
-        imagenet_int_to_str.update({i: row})
+# with open('./ilsvrc2012_wordnet_lemmas.txt', 'r') as f:
+#     for i in range(1000):
+#         row = f.readline()
+#         row = row.rstrip()
+#         imagenet_int_to_str.update({i: row})
 
 tf_flowers_labels = ['dandelion', 'daisy', 'tulips', 'sunflowers', 'roses']
 
@@ -895,7 +895,7 @@ if __name__ == "__main__":
             tf_tot_loss_ph = tf.compat.v1.placeholder(tf.float32, shape=None, name='loss')
             tf_tot_loss_summary = tf.compat.v1.summary.scalar('loss', tf_tot_loss_ph)
             performance_summaries = tf.compat.v1.summary.merge([tf_tot_acc_summary,tf_tot_loss_summary])
-            summ_writer = tf.compat.v1.compat.v1.summary.FileWriter(Path('logs') / current_time, sess.graph)
+            summ_writer = tf.compat.v1.compat.v1.summary.FileWriter(Path(yml_config['tensorboard_path']) / current_time, sess.graph)
 
 
         verbose_train_loop = 0

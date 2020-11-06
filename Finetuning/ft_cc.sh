@@ -7,6 +7,11 @@
 #SBATCH --output=out_%j.out
 
 
+echo 'Copying and unpacking dataset on local compute node...'
+tar -xf ~/scratch/data/images-224.tar -C $SLURM_TMPDIR
+echo 'Copying Data_Entry_2017.csv ...'
+cp ~/scratch/data/Data_Entry_2017.csv $SLURM_TMPDIR
+
 
 echo 'List1'
 ls -l -d ~/scratch/*/
@@ -43,6 +48,7 @@ pip3 install --no-index termcolor
 pip3 install --no-index Markdown
 pip3 install --no-index h5py
 pip3 install --no-index pyYAML
+pip3 install --no-index scikit-learn
 
 echo -e 'Installing TensorFlow-Datasets ******************************\n'
 pip3 install --no-index ~/python_packages/tensorflow-datasets/googleapis_common_protos-1.52.0-py2.py3-none-any.whl
@@ -55,5 +61,5 @@ pip3 install --no-index ~/python_packages/tensorflow-datasets/zipp-3.4.0-py3-non
 pip3 install --no-index ~/python_packages/tensorflow-datasets/tensorflow_datasets-4.0.1-py3-none-any.whl
 
 echo 'Calling python script'
-stdbuf -oL python -u finetuning.py
+stdbuf -oL python -u ./Finetuning/finetuning.py --config ./Finetuning/finetuning.yml
 # deactivate
