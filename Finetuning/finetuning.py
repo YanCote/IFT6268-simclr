@@ -898,7 +898,11 @@ if __name__ == "__main__":
             tf_tot_acc_summary = tf.compat.v1.summary.scalar('accuracy', tf_tot_acc_ph)
             tf_tot_loss_ph = tf.compat.v1.placeholder(tf.float32, shape=None, name='loss')
             tf_tot_loss_summary = tf.compat.v1.summary.scalar('loss', tf_tot_loss_ph)
-            performance_summaries = tf.compat.v1.summary.merge([tf_tot_acc_summary,tf_tot_loss_summary])
+
+            summary_op1 = tf.compat.v1.summary.text('Batch', tf.compat.v1.convert_to_tensor(str(batch_size)))
+            summary_op2 = tf.compat.v1.summary.text('Batch', tf.compat.v1.convert_to_tensor(str(yml_config['finetuning']['learning_rate'])))
+
+            performance_summaries = tf.compat.v1.summary.merge([tf_tot_acc_summary, tf_tot_loss_summary])
             summ_writer = tf.compat.v1.compat.v1.summary.FileWriter(Path(yml_config['tensorboard_path']) / current_time, sess.graph)
 
 
@@ -906,6 +910,9 @@ if __name__ == "__main__":
         np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
         with sess.as_default():
             writer = tf.compat.v1.summary.FileWriter('./log', sess.graph)
+            for index, summary_op in enumerate([summary_op1, summary_op2]):
+                text = sess.run(summary_op)
+                writer.add_summary(text, index)
             for it in range(epochs):
                 # Init dataset iterator
                 sess.run(x_init)
@@ -929,7 +936,7 @@ if __name__ == "__main__":
                     # if verbose_train_loop:
                     #     print(f"Acc per class: \n {acc_per_class}")
 
-                epoch_acc = (tot_acc/batch_size)
+                epoch_acc = (tot_acc/int(num_images / batch_size))
                 print(f"[Epoch {it + 1} Loss: {tot_loss.eval()} Training Accuracy: {epoch_acc.eval()}")
                 # Is it time to save the session?
                 is_time_to_save_session(it, sess)
