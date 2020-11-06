@@ -87,7 +87,11 @@ class LARSOptimizer(tf.train.Optimizer):
         continue
 
       param_name = param.op.name
-
+      #param_name = tf.get_variable_scope()
+      #with tf.variable_scope(tf.get_variable_scope()) as vscope:
+      #  for i in xrange(FLAGS.num_gpus):
+      #     with tf.device('/gpu:%d' % i):
+      #       tf.get_variable_scope().reuse_variables()
       v = tf.get_variable(
           name=param_name + "/Momentum",
           shape=param.shape.as_list(),

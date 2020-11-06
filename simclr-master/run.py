@@ -47,6 +47,10 @@ flags.DEFINE_string(
     'local_tmp_folder', "",
     'The local computer temp dir path.')
 
+flags.DEFINE_boolean(
+    'use_multi_gpus', False,
+    'Is there multiple GPUs on the compute node')
+
 flags.DEFINE_float(
     'learning_rate', 0.3,
     'Initial learning rate per batch size of 256.')
@@ -147,7 +151,7 @@ flags.DEFINE_string(
 
 current_time = datetime.today().strftime('%Y-%m-%d-%H-%M-%S')
 flags.DEFINE_string(
-    'model_dir', "~/scratch/runs/pretrain-simclr/{0}".format(current_time),
+    'model_dir', "/scratch/maruel/runs/pretrain-simclr/{0}".format(current_time), # ~ on cluster does not map at the same place
     'Model directory for training.')
 
 flags.DEFINE_string(
@@ -360,17 +364,36 @@ def main(argv):
     if len(argv) > 1:
         raise app.UsageError('Too many command-line arguments.')
 
+    if not os.path.exists(FLAGS.model_dir):
+        os.makedirs(FLAGS.model_dir)
+        print("Created directory: {0}".format(os.path.abspath(FLAGS.model_dir)))
+
     # Enable training summary.
     if FLAGS.train_summary_steps > 0:
         tf.config.set_soft_device_placement(True)
+
+    # Test multiple virtual gpus
+    #gpus = tf.config.experimental.list_physical_devices('GPU')
+    #if gpus:
+    #    # Create 2 virtual GPUs with 1GB memory each
+    #    try:
+    #        tf.config.experimental.set_virtual_device_configuration(
+    #            gpus[0],
+    #            [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=2048),
+    #            tf.config.experimental.VirtualDeviceConfiguration(memory_limit=2048)])
+    #        logical_gpus = tf.config.experimental.list_logical_devices('GPU')
+    #        print(len(gpus), "Physical GPU,", len(logical_gpus), "Logical GPUs")
+    #    except RuntimeError as e:
+    #        # Virtual devices must be set before GPUs have been initialized
+    #        print(e)
 
     # Choose dataset. 
     if FLAGS.dataset == "chest_xray":
         # Not really a builder, but it's compatible
         # TODO config
         data_path = FLAGS.local_tmp_folder
-        builder, info = chest_xray.XRayDataSet(data_path, config=None, train=True, return_tf_dataset=False)
-        build_input_fn = partial(data_lib.build_chest_xray_fn, data_path)
+        builder, info = chest_xray.XRayDataSet(data_path, config=None, train=True, return_tf_dataset=False, split=0.05)
+        build_input_fn = partial(data_lib.build_chest_xray_fn, FLAGS.use_multi_gpus, data_path)
         num_train_examples = info.get('num_examples')
         num_classes = info.get('num_classes')
         num_eval_examples = info.get('num_eval_classes')
@@ -405,6 +428,9 @@ def main(argv):
             tf.config.experimental_connect_to_cluster(cluster)
             tf.tpu.experimental.initialize_tpu_system(cluster)
 
+    strategy = tf.distribute.MirroredStrategy() if not FLAGS.use_tpu and FLAGS.use_multi_gpus else None # Multi GPU?
+    print("use_multi_gpus: {0}".format(FLAGS.use_multi_gpus))
+    print("use MirroredStrategy: {0}".format(not FLAGS.use_tpu and FLAGS.use_multi_gpus))
     default_eval_mode = tf.estimator.tpu.InputPipelineConfig.PER_HOST_V1
     sliced_eval_mode = tf.estimator.tpu.InputPipelineConfig.SLICED
     run_config = tf.estimator.tpu.RunConfig(
@@ -413,21 +439,23 @@ def main(argv):
             eval_training_input_configuration=sliced_eval_mode
             if FLAGS.use_tpu else default_eval_mode),
         model_dir=FLAGS.model_dir,
+        train_distribute=strategy, 
+        eval_distribute=strategy,
         save_summary_steps=checkpoint_steps,
         save_checkpoints_steps=checkpoint_steps,
         keep_checkpoint_max=FLAGS.keep_checkpoint_max,
         master=FLAGS.master,
         cluster=cluster)
     estimator = tf.estimator.tpu.TPUEstimator(
-        model_lib.build_model_fn(model, num_classes, num_train_examples),
+        model_lib.build_model_fn(model, num_classes, num_train_examples, FLAGS.train_batch_size),
         config=run_config,
         train_batch_size=FLAGS.train_batch_size,
         eval_batch_size=FLAGS.eval_batch_size,
         use_tpu=FLAGS.use_tpu)
+        
 
     # save flags for this experiment
-    if not os.path.exists(FLAGS.model_dir):
-        os.makedirs(FLAGS.model_dir)
+    
     FLAGS.append_flags_into_file(os.path.join(FLAGS.model_dir, 'experiment_flags.txt'))
 
     # Train/Eval
