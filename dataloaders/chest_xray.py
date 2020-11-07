@@ -85,7 +85,7 @@ class XRayDataSet(tf.data.Dataset):
         config: typing.Dict[typing.AnyStr, typing.Any] = None,
         train: bool = True,
         seed: int = 1337,
-        split: float =  0.75,
+        split: float =  0.9,
         return_tf_dataset: bool = True,
     ):
         """
@@ -123,6 +123,7 @@ class XRayDataSet(tf.data.Dataset):
             return_data = dataset.map(load_img, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         else:
             return_data = None
+
         return return_data, {"num_examples": num_examples, 
                             "num_classes": xray_n_class,
                             "num_eval_examples": num_eval_examples}
