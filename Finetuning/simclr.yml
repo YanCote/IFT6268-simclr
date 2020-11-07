@@ -1,29 +1,94 @@
 name: simclr
 channels:
+  - conda-forge
   - defaults
 dependencies:
-  - ca-certificates=2020.10.14=0
-  - certifi=2020.6.20=py38_0
+  - alembic=1.0.9=py37_0
+  - appdirs=1.4.4=pyh9f0ad1d_0
+  - asn1crypto=1.4.0=pyh9f0ad1d_0
+  - azure-core=1.8.2=pyh9f0ad1d_0
+  - azure-storage-blob=12.5.0=pyh9f0ad1d_0
+  - blas=1.0=mkl
+  - blinker=1.4=py_1
+  - brotlipy=0.7.0=py37h395d20d_1001
+  - ca-certificates=2020.6.20=hecda079_0
+  - certifi=2020.6.20=py37h2987424_2
+  - cffi=1.14.3=py37hed5b41f_0
+  - chardet=3.0.4=py37h2987424_1008
+  - click=7.1.2=pyh9f0ad1d_0
+  - cloudpickle=1.6.0=py_0
+  - configparser=5.0.1=py_0
+  - cryptography=3.2.1=py37h3b7a55b_0
+  - databricks-cli=0.9.1=py_0
+  - docker-py=4.3.1=py37hc8dfbb8_1
+  - docker-pycreds=0.4.0=py_0
+  - entrypoints=0.3=py37hc8dfbb8_1002
+  - flask=1.1.2=pyh9f0ad1d_0
+  - gitdb=4.0.5=py_0
+  - gitpython=3.1.11=py_0
+  - gorilla=0.3.0=py_0
+  - gunicorn=20.0.4=py37hc8dfbb8_2
+  - idna=2.10=pyh9f0ad1d_0
+  - intel-openmp=2019.4=233
+  - isodate=0.6.0=py_1
+  - itsdangerous=1.1.0=py_0
+  - jinja2=2.11.2=pyh9f0ad1d_0
   - libcxx=10.0.0=1
   - libedit=3.1.20191231=h1de35cc_1
   - libffi=3.3=hb1e8313_2
+  - libprotobuf=3.13.0.1=hab81aa3_0
+  - mako=1.1.3=pyh9f0ad1d_0
+  - markupsafe=1.1.1=py37h395d20d_2
+  - mkl=2019.4=233
+  - mkl-service=2.3.0=py37hfbe908c_0
+  - mkl_fft=1.2.0=py37hc64f4ea_0
+  - mkl_random=1.1.1=py37h959d312_0
+  - mlflow=1.11.0=py37hc8dfbb8_1
+  - msrest=0.6.19=pyh9f0ad1d_0
   - ncurses=6.2=h0a44026_1
+  - numpy=1.19.2=py37h456fd55_0
+  - numpy-base=1.19.2=py37hcfb5961_0
   - openssl=1.1.1h=haf1e3a3_0
-  - pip=20.2.4=py38_0
-  - python=3.8.5=h26836e1_1
+  - packaging=20.4=pyh9f0ad1d_0
+  - pandas=1.1.3=py37hb1e8313_0
+  - pip=20.2.4=py37_0
+  - prometheus_client=0.8.0=pyh9f0ad1d_0
+  - prometheus_flask_exporter=0.18.1=pyh9f0ad1d_0
+  - pycparser=2.20=pyh9f0ad1d_2
+  - pyjwt=1.7.1=py_0
+  - pyopenssl=19.1.0=py_1
+  - pyparsing=2.4.7=pyh9f0ad1d_0
+  - pysocks=1.7.1=py37h2987424_2
+  - python=3.7.9=h26836e1_0
+  - python-dateutil=2.8.1=py_0
+  - python-editor=1.0.4=py_0
+  - python_abi=3.7=1_cp37m
+  - pytz=2020.1=py_0
+  - querystring_parser=1.2.4=py_0
   - readline=8.0=h1de35cc_0
-  - setuptools=50.3.0=py38h0dc7051_1
+  - requests=2.24.0=pyh9f0ad1d_0
+  - requests-oauthlib=1.3.0=pyh9f0ad1d_0
+  - setuptools=50.3.0=py37h0dc7051_1
+  - six=1.15.0=py_0
+  - smmap=3.0.4=pyh9f0ad1d_0
+  - sqlalchemy=1.3.13=py37h0b31af3_0
   - sqlite=3.33.0=hffcf06c_0
+  - sqlparse=0.4.1=pyh9f0ad1d_0
+  - tabulate=0.8.7=pyh9f0ad1d_0
   - tk=8.6.10=hb0a8c7a_0
+  - urllib3=1.25.11=py_0
+  - websocket-client=0.57.0=py37hc8dfbb8_3
+  - werkzeug=1.0.1=pyh9f0ad1d_0
   - wheel=0.35.1=py_0
   - xz=5.2.5=h1de35cc_0
+  - yaml=0.2.5=haf1e3a3_0
   - zlib=1.2.11=h1de35cc_3
   - pip:
     - absl-py==0.10.0
     - astunparse==1.6.3
     - attrs==20.2.0
     - cachetools==4.1.1
-    - chardet==3.0.4
+    - cop==0.2
     - cycler==0.10.0
     - dill==0.3.2
     - dm-tree==0.1.5
@@ -35,13 +100,13 @@ dependencies:
     - googleapis-common-protos==1.52.0
     - grpcio==1.33.1
     - h5py==2.10.0
-    - idna==2.10
+    - importlib-metadata==2.0.0
     - importlib-resources==3.1.1
+    - joblib==0.17.0
     - keras-preprocessing==1.1.2
     - kiwisolver==1.2.0
-    - markdown==3.3.2
+    - markdown==3.3.3
     - matplotlib==3.3.2
-    - numpy==1.19.2
     - oauthlib==3.1.0
     - opt-einsum==3.3.0
     - pillow==8.0.1
@@ -49,12 +114,10 @@ dependencies:
     - protobuf==3.13.0
     - pyasn1==0.4.8
     - pyasn1-modules==0.2.8
-    - pyparsing==2.4.7
-    - python-dateutil==2.8.1
-    - requests==2.24.0
-    - requests-oauthlib==1.3.0
+    - pyyaml==5.3.1
     - rsa==4.6
-    - six==1.15.0
+    - scikit-learn==0.23.2
+    - scipy==1.5.3
     - tensorboard==2.3.0
     - tensorboard-plugin-wit==1.7.0
     - tensorflow==2.3.1
@@ -63,8 +126,8 @@ dependencies:
     - tensorflow-hub==0.9.0
     - tensorflow-metadata==0.24.0
     - termcolor==1.1.0
-    - tqdm==4.50.2
-    - urllib3==1.25.11
-    - werkzeug==1.0.1
+    - threadpoolctl==2.1.0
+    - tqdm==4.51.0
     - wrapt==1.12.1
+    - zipp==3.4.0
 prefix: /opt/miniconda3/envs/simclr

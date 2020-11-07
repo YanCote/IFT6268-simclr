@@ -3,7 +3,7 @@
 #SBATCH --gres=gpu:2
 #SBATCH --cpus-per-task=1
 #SBATCH --account=def-bengioy
-#SBATCH --mem=12G
+#SBATCH --mem=32G
 #SBATCH --output=out_%j.out
 
 

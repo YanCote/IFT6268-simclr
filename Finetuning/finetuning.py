@@ -916,7 +916,8 @@ if __name__ == "__main__":
             for it in range(epochs):
                 # Init dataset iterator
                 sess.run(x_init)
-
+                tot_acc = tf.zeros([])
+                tot_loss = tf.zeros([])
                 for step in range(int(num_images / batch_size)):
                     _, loss, image, logits, labels = sess.run(fetches=(train_op, loss_t, x['image'], logits_t, x['label']))
                     tot_loss += loss
