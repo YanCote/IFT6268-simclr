@@ -6,3 +6,5 @@ tensorflow-hub
 numpy
 matplotlib
 pyYAML
+scikit-learn
+mlflow

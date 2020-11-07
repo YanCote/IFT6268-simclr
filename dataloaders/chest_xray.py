@@ -7,7 +7,7 @@ import pdb
 import typing
 import random
 from tensorflow.python.ops import io_ops
-from tensorflow.python.ops import image_ops
+from sklearn.preprocessing import MultiLabelBinarizer
 
 XR_LABELS = {
     'Atelectasis': 0,
@@ -20,11 +20,11 @@ XR_LABELS = {
     'Hernia': 7,
     'Infiltration': 8,
     'Mass': 9,
-    'No Finding': 10,
-    'Nodule': 11,
-    'Pleural_Thickening': 12,
-    'Pneumonia' : 13,
-    'Pneumothorax': 14,
+    'Nodule': 10,
+    'Pleural_Thickening': 11,
+    'Pneumonia' : 12,
+    'Pneumothorax': 13
+    # 'No Finding': 14
 }
 
 xray_n_class = len(XR_LABELS.keys())
@@ -59,22 +59,26 @@ def PrepareData(
     # make a list of image paths to use
     index_imgs = df[("Image Index")].values.tolist()
     labels = df[("Finding Labels")].values.tolist()
+    labels_split = [labels[i].split('|') for i in range(len(df[("Finding Labels")]))]
+
     for i in range(len(index_imgs)):
         index_imgs[i] = os.path.join(img_data_path, index_imgs[i])
 
-    # Make onehot labels
-    one_hot_labels = xray_n_class*[0]
-    for i in range(len(labels)):
-        for key in XR_LABELS.keys():
-            one_hot_labels[XR_LABELS[key]] = 1 if key in labels[i] else 0
-        labels[i] = tf.cast(one_hot_labels, dtype=tf.float32)
+
+    mlb = MultiLabelBinarizer(classes = list(XR_LABELS.keys()))
+    one_hot_labels = mlb.fit_transform(labels_split)
 
     # TODO change num classes
     # < YC use dict's len 29/10/2020>
-    return (index_imgs, labels) 
+    return (index_imgs, tf.convert_to_tensor(one_hot_labels, dtype=tf.float32))
     
 
 class XRayDataSet(tf.data.Dataset):
+    """
+    Wrapper class for the NIH ChestRay Dataset: https://academictorrents.com/details/e615d3aebce373f1dc8bd9d11064da55bdadede0
+    it is a Multi-label(14) classification
+
+    """
     def __new__(
         cls,
         data_path: typing.AnyStr,
@@ -146,9 +150,6 @@ if __name__ == "__main__":
 
     else:
         train_ds , tfds_info = XRayDataSet(data_path, config=config,train=True) \
-            # .prefetch(tf.data.experimental.AUTOTUNE) \
-            # .shuffle(buffer_size)\
-            # .batch(batch_size)
 
     # [x['image'].shape for x in train_ds.take(20)]
             
