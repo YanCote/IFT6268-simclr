@@ -258,6 +258,15 @@ flags.DEFINE_boolean(
     'Whether or not to use Gaussian blur for augmentation during pretraining.')
 
 
+flags.DEFINE_string(
+    'checkpoint_path', "/Users/shanelgauthier/Documents/UDEM/Self-Supervised Learning/pretrain-simclr/2020-11-06-13-13-52/model.ckpt-0",
+    'The path to a checkpoint. From this checkpoint, an hub module is created.')
+
+flags.DEFINE_integer(
+    'num_classes', 15,
+    'The number of classes to create the hub module from checkpoint_path.')
+
+
 def build_hub_module(model, num_classes, global_step, checkpoint_path):
     """Create TF-Hub module."""
 
@@ -406,7 +415,7 @@ def main(argv):
         build_input_fn = data_lib.build_input_fn
 
     train_steps = model_util.get_train_steps(num_train_examples)
-    #eval_steps = int(math.ceil(num_eval_examples / FLAGS.eval_batch_size))
+    eval_steps = int(math.ceil(num_eval_examples / FLAGS.eval_batch_size))
     epoch_steps = int(round(num_train_examples / FLAGS.train_batch_size))
 
     resnet.BATCH_NORM_DECAY = FLAGS.batch_norm_decay
@@ -486,6 +495,26 @@ def main(argv):
                 num_classes=num_classes)
 
 
+def create_module_from_checkpoints(args):
+
+    resnet.BATCH_NORM_DECAY = FLAGS.batch_norm_decay
+    model = resnet.resnet_v1(
+        resnet_depth=FLAGS.resnet_depth,
+        width_multiplier=FLAGS.width_multiplier,
+        cifar_stem=FLAGS.image_size <= 32)
+    
+    #save the model in the same folder as the checkpoints
+    #FLAGS.model_dir = FLAGS.checkpoint_path
+    print('Start: Creating Hub Module from FLAGS.checkpoint_path')
+    global_step = int(FLAGS.checkpoint_path[-1])
+    build_hub_module(model, FLAGS.num_classes,
+                     global_step = global_step,
+                     checkpoint_path= FLAGS.checkpoint_path)
+    print('Hub Module Created')
+    sys.exit(0)
+    
+
 if __name__ == '__main__':
     tf.disable_v2_behavior()  # Disable eager mode when running with TF2.
+    #app.run(create_module_from_checkpoints)
     app.run(main)
