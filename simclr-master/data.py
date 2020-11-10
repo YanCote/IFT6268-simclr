@@ -109,9 +109,9 @@ def build_chest_xray_fn(use_multi_gpus, data_path, _, is_training):
     def _input_fn(params):
         """Inner input function."""
         preprocess_fn_pretrain = get_preprocess_fn(
-            is_training, is_pretrain=True)
+            is_training, color_distort=False) # Removed color distortion, since images are all in black and white
         preprocess_fn_finetune = get_preprocess_fn(
-            is_training, is_pretrain=False)
+            is_training, color_distort=False)
 
         def map_fn(data_point):
             """Produces multiple transformations of the same batch."""
@@ -166,9 +166,9 @@ def build_input_fn(builder, is_training):
     def _input_fn(params):
         """Inner input function."""
         preprocess_fn_pretrain = get_preprocess_fn(
-            is_training, is_pretrain=True)
+            is_training, color_distort=True)
         preprocess_fn_finetune = get_preprocess_fn(
-            is_training, is_pretrain=False)
+            is_training, color_distort=False)
         num_classes = builder.info.features['label'].num_classes
 
         def map_fn(image, label):
@@ -205,7 +205,7 @@ def build_input_fn(builder, is_training):
     return _input_fn
 
 
-def get_preprocess_fn(is_training, is_pretrain):
+def get_preprocess_fn(is_training, color_distort):
     """Get function that accepts an image and returns a preprocessed image."""
     # Disable test cropping for small images (e.g. CIFAR)
     if FLAGS.image_size <= 32:
@@ -217,5 +217,5 @@ def get_preprocess_fn(is_training, is_pretrain):
         height=FLAGS.image_size,
         width=FLAGS.image_size,
         is_training=is_training,
-        color_distort=is_pretrain,
+        color_distort=color_distort,
         test_crop=test_crop)

@@ -52,7 +52,7 @@ flags.DEFINE_boolean(
     'Is there multiple GPUs on the compute node')
 
 flags.DEFINE_float(
-    'learning_rate', 0.3,
+    'learning_rate', 0.1,
     'Initial learning rate per batch size of 256.')
 
 flags.DEFINE_enum(
@@ -250,16 +250,15 @@ flags.DEFINE_integer(
     'Input image size.')
 
 flags.DEFINE_float(
-    'color_jitter_strength', 1.0,
+    'color_jitter_strength', 0.5,
     'The strength of color jittering.')
 
 flags.DEFINE_boolean(
     'use_blur', True,
     'Whether or not to use Gaussian blur for augmentation during pretraining.')
 
-
 flags.DEFINE_string(
-    'checkpoint_path', "/Users/shanelgauthier/Documents/UDEM/Self-Supervised Learning/pretrain-simclr/2020-11-06-13-13-52/model.ckpt-0",
+    'checkpoint_path', "",
     'The path to a checkpoint. From this checkpoint, an hub module is created.')
 
 flags.DEFINE_integer(
@@ -405,7 +404,7 @@ def main(argv):
         build_input_fn = partial(data_lib.build_chest_xray_fn, FLAGS.use_multi_gpus, data_path)
         num_train_examples = info.get('num_examples')
         num_classes = info.get('num_classes')
-        num_eval_examples = info.get('num_eval_classes')
+        num_eval_examples = info.get('num_eval_examples')
     else:
         #builder = tfds.builder(FLAGS.dataset, data_dir=FLAGS.data_dir)
         builder.download_and_prepare()

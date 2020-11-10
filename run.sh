@@ -1,9 +1,11 @@
 #!/bin/bash
-#SBATCH --time=0-10:00
-#SBATCH --gres=gpu:p100:2
-#SBATCH --cpus-per-task=8
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --time=1-00:00
+#SBATCH --gres=gpu:p100l:4
+#SBATCH --cpus-per-task=24
 #SBATCH --account=def-bengioy
-#SBATCH --mem=20G
+#SBATCH --mem=0
 
 echo 'Copying and unpacking dataset on local compute node...'
 tar -xf ~/scratch/data/images-224.tar -C $SLURM_TMPDIR
@@ -38,9 +40,10 @@ pip3 install --no-index termcolor
 pip3 install --no-index Markdown
 pip3 install --no-index h5py
 pip3 install --no-index pyYAML
+pip3 install --no-index scikit-learn
 
 echo 'Calling python script'
 dt=$(date '+%d-%m-%Y-%H-%M-%S');
-stdbuf -oL python -u simclr-master/run.py --local_tmp_folder $SLURM_TMPDIR --train_batch_size 32 --eval_batch_size 32 --use_multi_gpus --optimizer adam --model_dir /scratch/maruel/runs/pretrain-simclr/$dt
+stdbuf -oL python -u simclr-master/run.py --local_tmp_folder $SLURM_TMPDIR --train_batch_size 80 --eval_batch_size 80 --use_multi_gpus --optimizer adam --model_dir /scratch/maruel/runs/pretrain-simclr-img-ok/$dt --temperature 0.5
 # deactivate
 

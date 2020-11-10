@@ -41,8 +41,8 @@ def load_img(path, one_hot_labels):
     img = io_ops.read_file(path)
     img = tf.compat.v1.image.decode_image(
         img, channels=num_channels, expand_animations=False)
-    img = tf.compat.v1.image.resize(img, image_size, method=interpolation)
-    img.set_shape((image_size[0], image_size[1], num_channels))
+    #img = tf.compat.v1.image.resize(img, image_size, method=interpolation)
+    #img.set_shape((image_size[0], image_size[1], num_channels))
 
     return {'image': img, 'label': one_hot_labels}
 
@@ -85,7 +85,7 @@ class XRayDataSet(tf.data.Dataset):
         config: typing.Dict[typing.AnyStr, typing.Any] = None,
         train: bool = True,
         seed: int = 1337,
-        split: float =  0.75,
+        split: float =  0.90,
         return_tf_dataset: bool = True,
     ):
         """
@@ -123,6 +123,7 @@ class XRayDataSet(tf.data.Dataset):
             return_data = dataset.map(load_img, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         else:
             return_data = None
+
         return return_data, {"num_examples": num_examples, 
                             "num_classes": xray_n_class,
                             "num_eval_examples": num_eval_examples}
