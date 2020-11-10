@@ -46,11 +46,14 @@ if os.path.abspath(".") not in sys.path:
 
 import dataloaders.chest_xray as chest_xray
 import utils.model_ckpt as model_ckpt
+import warnings
+warnings.filterwarnings("ignore")
 import argparse
 import yaml
 from datetime import datetime
 from functools import partial
 from tensorflow.python.client import device_lib
+from sklearn.metrics import roc_auc_score
 import matplotlib.pyplot as plt
 import datetime
 import tensorflow_datasets as tfds
@@ -58,10 +61,11 @@ import tensorflow_hub as hub
 import re
 import numpy as np
 import tensorflow as tf
+import mlflow
 from pathlib import Path
 print(tf.__version__)
 tf.compat.v1.disable_eager_execution()
-# tf.compat.v1.disable_v2_behavior()
+# tf.compat.v1.disablfe_v2_behavior()
 
 
 # Argument Parsing
@@ -776,24 +780,22 @@ def weighted_cel(
     relu_logits = array_ops.where(cond, logits, zeros)
     not_relu_logits = array_ops.where(cond, zeros, logits)
     neg_abs_logits = array_ops.where(cond, -logits, logits)
-    A = beta_p * (labels * (math_ops.log1p(1 + math_ops.exp(-logits))  + not_relu_logits))
-    B = beta_n * ((1-labels) * (relu_logits + math_ops.log1p(1 + math_ops.exp(-logits))))
+    A = beta_p * (labels * (math_ops.log1p(1 + math_ops.exp(neg_abs_logits))  + not_relu_logits))
+    B = beta_n * ((1-labels) * (relu_logits + math_ops.log1p(1 + math_ops.exp(neg_abs_logits))))
     return math_ops.add(A, B, name=name)
 
 def test_weighted_cel():
     with tf.compat.v1.Session():
         b = 64
-        c = 12
+        c = 14
         logits = tf.random.uniform([b, c], minval=-1, maxval=1)
         labels = tf.cast(tf.random.uniform([b, c], minval=-1, maxval=1) > 0, tf.float32)
         loss = weighted_cel(labels=labels, logits=logits)
 
-
-
 if __name__ == "__main__":
 
     with strategy.scope():
-
+        
         # @title Load tensorflow datasets: we use tensorflow flower dataset as an example
         batch_size = yml_config['finetuning']['batch']
         buffer_size = yml_config['finetuning']['buffer_size']
@@ -809,7 +811,7 @@ if __name__ == "__main__":
 
         elif dataset_name == 'chest_xray':
             data_path = yml_config['dataset']['chest_xray']
-            data_path = args.xray_path
+            #data_path = args.xray_path
             train_dataset, tfds_info = chest_xray.XRayDataSet(data_path, config=None, train=True)
             num_images = np.floor(yml_config['finetuning']['train_data_ratio'] * tfds_info['num_examples'])
             num_classes = tfds_info['num_classes']
@@ -918,37 +920,79 @@ if __name__ == "__main__":
                 sess.run(x_init)
                 tot_acc = tf.zeros([])
                 tot_loss = tf.zeros([])
+                all_labels = []
+                all_logits = []
                 for step in range(int(num_images / batch_size)):
                     _, loss, image, logits, labels = sess.run(fetches=(train_op, loss_t, x['image'], logits_t, x['label']))
                     tot_loss += loss
+                    all_labels.extend(labels)
+                    all_logits.extend(tf.sigmoid(logits).eval())
                     if dataset_name == 'tf_flowers':
                         pred = logits.argmax(-1)
                         correct = np.sum(pred == labels)
                         acc_per_class = np.array([correct / float(batch_size)])
-                    elif dataset_name == 'chest_xray':
+                    elif dataset_name == 'chest_xray':                       
+                        logits  = tf.sigmoid(logits) 
                         pred = tf.cast(logits > 0.5, tf.float32)
                         acc = tf.reduce_mean(tf.reduce_min(tf.cast(tf.equal(pred, labels), tf.float32),axis=1))
                         tot_acc += acc
                         if verbose_train_loop:
-                            print(f" {logits[1]} \n {pred[1].eval()} \n {labels[1]}\n ")
-
-
-                    print(f"[Epoch {it + 1} Iter {step}] Total Loss: {tot_loss} Loss: {loss} Batch Acc: {acc.eval()}")
+                            print(f" Logits: {logits[1].eval()} \n Pred: {pred[1].eval()} \n Labels:{labels[1]}\n ")
+                        
+                    #The function roc_auc_score can result in a error (ValueError: Only one class present in y_true. 
+                    # ROC AUC score is not defined in that) . The error occurred when each label has only one class 
+                    # in the batch. For example, if all the samples in the batch has hernia +1, the error will occurred.I
+                    try:
+                        auc_cum = roc_auc_score(np.array(all_labels),np.array(all_logits))
+                    except:
+                        auc_cum = None
+                        
+                    print(f"[Epoch {it + 1} Iter {step}] Total Loss: {tot_loss} Loss: {loss} Batch Acc: {acc.eval()} \
+                                Avg Cumulative ROC scores: {auc_cum}")
+    
                     # if verbose_train_loop:
                     #     print(f"Acc per class: \n {acc_per_class}")
 
                 epoch_acc = (tot_acc/int(num_images / batch_size))
-                print(f"[Epoch {it + 1} Loss: {tot_loss.eval()} Training Accuracy: {epoch_acc.eval()}")
+
+                try:
+                    epoch_auc = roc_auc_score(np.array(all_labels),np.array(all_logits), average=None)
+                    epoch_auc_mean = epoch_auc.mean()
+                    aucs = dict(zip(chest_xray.XR_LABELS.keys(),epoch_auc ))
+                    auc_scores = {'AUC ' + str(key): val for key, val in aucs.items()} 
+
+                except:
+                    epoch_auc= None
+                    epoch_auc_mean= None
+
+                print(f"[Epoch {it + 1} Loss: {tot_loss.eval()} Training Accuracy: {epoch_acc.eval()}, Training AUC: {epoch_auc},")
                 # Is it time to save the session?
                 is_time_to_save_session(it, sess)
 
 
                 # ===================== Write Tensorboard summary ===============================
                 # Execute the summaries defined above
-                summ = sess.run(performance_summaries, feed_dict={tf_tot_acc_ph: epoch_acc.eval(), tf_tot_loss_ph: tot_loss.eval()})
+                summ = sess.run(performance_summaries, feed_dict={tf_tot_acc_ph: epoch_acc.eval(), 
+                                                                 tf_tot_loss_ph: tot_loss.eval(),
+                                                                 tf_tot_auc_ph: epoch_auc_mean})
 
 
                 # Write the obtained summaries to the file, so it can be displayed in the TensorBoard
                 summ_writer.add_summary(summ, it)
 
             # ====================== Calculate the Validation Accuracy ==========================
+
+            # This MLFLOW code is now saving training metrics. When the validation accuracy will be completed,
+            # we should save instead the validation/test metrics. 
+            # The saving will occured only at the end of the finetuning       
+            mlflow.set_tracking_uri(yml_config['mlflow_path']) 
+            mlflow.set_experiment('fine_tuning')
+            with mlflow.start_run():
+                mlflow.log_params(yml_config['finetuning'])
+                mlflow.log_metric('Total Accuracy',epoch_acc.eval())
+                mlflow.log_metric('Total Loss',tot_loss.eval())
+                if epoch_auc is not None:
+                    mlflow.log_metrics(auc_scores)
+                
+
+
