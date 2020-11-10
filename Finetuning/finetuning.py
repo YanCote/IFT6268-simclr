@@ -65,7 +65,7 @@ import mlflow
 from pathlib import Path
 print(tf.__version__)
 tf.compat.v1.disable_eager_execution()
-# tf.compat.v1.disablfe_v2_behavior()
+# tf.compat.v1.disable_v2_behavior()
 
 
 # Argument Parsing
