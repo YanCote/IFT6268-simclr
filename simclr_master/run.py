@@ -259,8 +259,8 @@ flags.DEFINE_boolean(
 
 
 flags.DEFINE_string(
-    'checkpoint_path', "/Users/shanelgauthier/Documents/UDEM/Self-Supervised Learning/pretrain-simclr/2020-11-06-13-13-52/model.ckpt-0",
-    'The path to a checkpoint. From this checkpoint, an hub module is created.')
+    'checkpoint_path', ""#"H:/AI_Projects/outputs/runs/SimCLR/cluster_results/pretrain-simclr-img-ok/09-11-2020-11-31-20",
+    'The path to a checkpoint. From this checkpoint, a hub module is created.')
 
 flags.DEFINE_integer(
     'num_classes', 15,
@@ -301,6 +301,8 @@ def build_hub_module(model, num_classes, global_step, checkpoint_path):
             endpoints['logits_sup'] = logits_sup
         hub.add_signature(inputs=dict(images=inputs),
                           outputs=dict(endpoints, default=hiddens))
+        hub.add_signature(name="full-projection", inputs=dict(images=inputs),
+                          outputs=dict(endpoints, default=hiddens_proj))
 
     # Drop the non-supported non-standard graph collection.
     drop_collections = ['trainable_variables_inblock_%d' % d for d in range(6)]
@@ -405,7 +407,7 @@ def main(argv):
         build_input_fn = partial(data_lib.build_chest_xray_fn, FLAGS.use_multi_gpus, data_path)
         num_train_examples = info.get('num_examples')
         num_classes = info.get('num_classes')
-        num_eval_examples = info.get('num_eval_classes')
+        num_eval_examples = info.get('num_eval_examples')
     else:
         #builder = tfds.builder(FLAGS.dataset, data_dir=FLAGS.data_dir)
         builder.download_and_prepare()

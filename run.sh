@@ -38,6 +38,7 @@ pip3 install --no-index termcolor
 pip3 install --no-index Markdown
 pip3 install --no-index h5py
 pip3 install --no-index pyYAML
+pip3 install --no-index scikit-learn
 
 echo 'Calling python script'
 dt=$(date '+%d-%m-%Y-%H-%M-%S');

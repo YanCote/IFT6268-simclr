@@ -32,7 +32,7 @@ verbose = 0
 img_dtype = tf.float32
 # img_dtype = tf.int32
 
-def load_img(path, one_hot_labels):
+def load_img(path, one_hot_labels, img_idx):
     image_size=(224, 224)
     num_channels=3
     interpolation='bilinear'
@@ -41,10 +41,10 @@ def load_img(path, one_hot_labels):
     img = io_ops.read_file(path)
     img = tf.compat.v1.image.decode_image(
         img, channels=num_channels, expand_animations=False)
-    img = tf.compat.v1.image.resize(img, image_size, method=interpolation)
-    img.set_shape((image_size[0], image_size[1], num_channels))
+    #img = tf.compat.v1.image.resize(img, image_size)
+    #img.set_shape((image_size[0], image_size[1], num_channels))
 
-    return {'image': img, 'label': one_hot_labels}
+    return {'image': img, 'label': one_hot_labels, 'idx': img_idx}
 
 def PrepareData(
     img_data_path: str,
@@ -70,7 +70,7 @@ def PrepareData(
 
     # TODO change num classes
     # < YC use dict's len 29/10/2020>
-    return (index_imgs, tf.convert_to_tensor(one_hot_labels, dtype=tf.float32))
+    return (index_imgs, tf.convert_to_tensor(one_hot_labels, dtype=tf.float32), df[("Image Index")].values.tolist())
     
 
 class XRayDataSet(tf.data.Dataset):
@@ -136,21 +136,21 @@ if __name__ == "__main__":
 
     use_cache = False
     # data_frame_path = "./NIH/Data_Entry_2017.csv"
-    data_path = "../NIH"
+    data_path = "H:/data/chest-xray"
     config = dict()
     scratch_dir = None
     batch_size = 128
     buffer_size = 128 * 2
 
     if use_cache:
-        train_ds = XRayDataSet(img_data_path, data_frame_path, config=config, scratch_dir=scratch_dir) \
+        train_ds = XRayDataSet(img_data_path) \
             .prefetch(tf.data.experimental.AUTOTUNE) \
             .batch(batch_size) \
             .cache(cache_dir + "/tf_learn_cache") \
             .shuffle(buffer_size)
 
     else:
-        train_ds , tfds_info = XRayDataSet(data_path, config=config,train=True) \
+        train_ds , tfds_info = XRayDataSet(data_path, config=config, train=True) 
 
     # [x['image'].shape for x in train_ds.take(20)]
             
