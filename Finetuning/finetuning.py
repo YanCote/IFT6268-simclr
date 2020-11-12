@@ -899,7 +899,7 @@ if __name__ == "__main__":
             tf_tot_acc_ph = tf.compat.v1.placeholder(tf.float32, shape=None, name='accuracy')
             tf_tot_acc_summary = tf.compat.v1.summary.scalar('accuracy', tf_tot_acc_ph)
             tf_tot_loss_ph = tf.compat.v1.placeholder(tf.float32, shape=None, name='loss')
-            tf_tot_auc_ph = tf.compat.v1.placeholder(tf.float32, shape=None, name='loss')
+            tf_tot_auc_ph = tf.compat.v1.placeholder(tf.float32, shape=None, name='auc')
             tf_tot_loss_summary = tf.compat.v1.summary.scalar('loss', tf_tot_loss_ph)
 
             summary_op1 = tf.compat.v1.summary.text('Batch', tf.compat.v1.convert_to_tensor(str(batch_size)))
