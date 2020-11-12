@@ -810,8 +810,10 @@ if __name__ == "__main__":
             num_classes = tfds_info.features['label'].num_classes
 
         elif dataset_name == 'chest_xray':
-            data_path = yml_config['dataset']['chest_xray']
-            #data_path = args.xray_path
+            if args.xray_path == '':
+                data_path = yml_config['dataset']['chest_xray']
+            else:
+                data_path = args.xray_path
             train_dataset, tfds_info = chest_xray.XRayDataSet(data_path, config=None, train=True)
             num_images = np.floor(yml_config['finetuning']['train_data_ratio'] * tfds_info['num_examples'])
             num_classes = tfds_info['num_classes']
