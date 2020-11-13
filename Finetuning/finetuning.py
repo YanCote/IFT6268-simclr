@@ -61,11 +61,12 @@ import tensorflow_hub as hub
 import re
 import numpy as np
 import tensorflow as tf
+import tensorflow.compat.v1  as tf1
 import mlflow
 from pathlib import Path
 print(tf.__version__)
-tf.compat.v1.disable_eager_execution()
-# tf.compat.v1.disable_v2_behavior()
+tf1.disable_eager_execution()
+# tf1.disable_v2_behavior()
 
 
 # Argument Parsing
@@ -83,7 +84,7 @@ try:
 except Exception:
     raise RuntimeError(f"Configuration file {args.config} do not exist")
 
-# tf.compat.v1.enable_eager_execution(config=None, device_policy=None, execution_mode=None)
+# tf1.enable_eager_execution(config=None, device_policy=None, execution_mode=None)
 
 # Processing device selection
 device_name = [x.name for x in device_lib.list_local_devices()
@@ -178,7 +179,7 @@ def color_jitter_nonrand(image, brightness=0, contrast=0, saturation=0, hue=0):
     Returns:
       The distorted image tensor.
     """
-    with tf.compat.v1.name_scope('distort_color'):
+    with tf1.name_scope('distort_color'):
         def apply_transform(i, x, brightness, contrast, saturation, hue):
             """Apply the i-th transformation."""
             if brightness != 0 and i == 0:
@@ -211,7 +212,7 @@ def color_jitter_rand(image, brightness=0, contrast=0, saturation=0, hue=0):
     Returns:
       The distorted image tensor.
     """
-    with tf.compat.v1.name_scope('distort_color'):
+    with tf1.name_scope('distort_color'):
         def apply_transform(i, x):
             """Apply the i-th transformation."""
             def brightness_foo():
@@ -343,7 +344,7 @@ def distorted_bounding_box_crop(image,
     Returns:
       (cropped image `Tensor`, distorted bbox `Tensor`).
     """
-    with tf.compat.v1.name_scope(scope, 'distorted_bounding_box_crop', [image, bbox]):
+    with tf1.name_scope(scope, 'distorted_bounding_box_crop', [image, bbox]):
         shape = tf.shape(input=image)
         sample_distorted_bounding_box = tf.image.sample_distorted_bounding_box(
             image_size=shape,
@@ -563,7 +564,7 @@ def preprocess_image(image, height, width, is_training=False,
 EETA_DEFAULT = 0.001
 
 
-class LARSOptimizer(tf.compat.v1.train.Optimizer):
+class LARSOptimizer(tf1.train.Optimizer):
     """Layer-wise Adaptive Rate Scaling for large batch training.
 
     Introduced by "Large Batch Training of Convolutional Networks" by Y. You,
@@ -619,7 +620,7 @@ class LARSOptimizer(tf.compat.v1.train.Optimizer):
 
     def apply_gradients(self, grads_and_vars, global_step=None, name=None):
         if global_step is None:
-            global_step = tf.compat.v1.train.get_or_create_global_step()
+            global_step = tf1.train.get_or_create_global_step()
         new_global_step = global_step + 1
 
         assignments = []
@@ -629,12 +630,12 @@ class LARSOptimizer(tf.compat.v1.train.Optimizer):
 
             param_name = param.op.name
 
-            v = tf.compat.v1.get_variable(
+            v = tf1.get_variable(
                 name=param_name + "/Momentum",
                 shape=param.shape.as_list(),
                 dtype=tf.float32,
                 trainable=False,
-                initializer=tf.compat.v1.zeros_initializer())
+                initializer=tf1.zeros_initializer())
 
             if self._use_weight_decay(param_name):
                 grad += self.weight_decay * param
@@ -644,8 +645,8 @@ class LARSOptimizer(tf.compat.v1.train.Optimizer):
                 if self._do_layer_adaptation(param_name):
                     w_norm = tf.norm(tensor=param, ord=2)
                     g_norm = tf.norm(tensor=grad, ord=2)
-                    trust_ratio = tf.compat.v1.where(
-                        tf.greater(w_norm, 0), tf.compat.v1.where(
+                    trust_ratio = tf1.where(
+                        tf.greater(w_norm, 0), tf1.where(
                             tf.greater(g_norm, 0), (self.eeta *
                                                     w_norm / g_norm),
                             1.0),
@@ -670,8 +671,8 @@ class LARSOptimizer(tf.compat.v1.train.Optimizer):
                 if self._do_layer_adaptation(param_name):
                     w_norm = tf.norm(tensor=param, ord=2)
                     v_norm = tf.norm(tensor=update, ord=2)
-                    trust_ratio = tf.compat.v1.where(
-                        tf.greater(w_norm, 0), tf.compat.v1.where(
+                    trust_ratio = tf1.where(
+                        tf.greater(w_norm, 0), tf1.where(
                             tf.greater(v_norm, 0), (self.eeta *
                                                     w_norm / v_norm),
                             1.0),
@@ -709,6 +710,72 @@ from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import nn_ops
 from tensorflow.python.framework import ops
 
+def sigmoid_cross_entropy_with_logits(  # pylint: disable=invalid-name
+    _sentinel=None,
+    labels=None,
+    logits=None,
+    name=None):
+  """Computes sigmoid cross entropy given `logits`.
+  Measures the probability error in discrete classification tasks in which each
+  class is independent and not mutually exclusive.  For instance, one could
+  perform multilabel classification where a picture can contain both an elephant
+  and a dog at the same time.
+  For brevity, let `x = logits`, `z = labels`.  The logistic loss is
+        z * -log(sigmoid(x)) + (1 - z) * -log(1 - sigmoid(x))
+      = z * -log(1 / (1 + exp(-x))) + (1 - z) * -log(exp(-x) / (1 + exp(-x)))
+      = z * log(1 + exp(-x)) + (1 - z) * (-log(exp(-x)) + log(1 + exp(-x)))
+      = z * log(1 + exp(-x)) + (1 - z) * (x + log(1 + exp(-x))
+      = (1 - z) * x + log(1 + exp(-x))
+      = x - x * z + log(1 + exp(-x))
+  For x < 0, to avoid overflow in exp(-x), we reformulate the above
+        x - x * z + log(1 + exp(-x))
+      = log(exp(x)) - x * z + log(1 + exp(-x))
+      = - x * z + log(1 + exp(x))
+  Hence, to ensure stability and avoid overflow, the implementation uses this
+  equivalent formulation
+      max(x, 0) - x * z + log(1 + exp(-abs(x)))
+  `logits` and `labels` must have the same type and shape.
+  Args:
+    _sentinel: Used to prevent positional parameters. Internal, do not use.
+    labels: A `Tensor` of the same type and shape as `logits`.
+    logits: A `Tensor` of type `float32` or `float64`.
+    name: A name for the operation (optional).
+  Returns:
+    A `Tensor` of the same shape as `logits` with the componentwise
+    logistic losses.
+  Raises:
+    ValueError: If `logits` and `labels` do not have the same shape.
+  """
+  # pylint: disable=protected-access
+  nn_ops._ensure_xent_args("sigmoid_cross_entropy_with_logits", _sentinel,
+                           labels, logits)
+  # pylint: enable=protected-access
+
+  with ops.name_scope(name, "logistic_loss", [logits, labels]) as name:
+    logits = ops.convert_to_tensor(logits, name="logits")
+    labels = ops.convert_to_tensor(labels, name="labels")
+    try:
+      labels.get_shape().merge_with(logits.get_shape())
+    except ValueError:
+      raise ValueError("logits and labels must have the same shape (%s vs %s)" %
+                       (logits.get_shape(), labels.get_shape()))
+
+    # The logistic loss formula from above is
+    #   x - x * z + log(1 + exp(-x))
+    # For x < 0, a more numerically stable formula is
+    #   -x * z + log(1 + exp(x))
+    # Note that these two expressions can be combined into the following:
+    #   max(x, 0) - x * z + log(1 + exp(-abs(x)))
+    # To allow computing gradients at zero, we define custom versions of max and
+    # abs functions.
+    zeros = array_ops.zeros_like(logits, dtype=logits.dtype)
+    cond = (logits >= zeros)
+    relu_logits = array_ops.where(cond, logits, zeros)
+    neg_abs_logits = array_ops.where(cond, -logits, logits)
+    return math_ops.add(
+        relu_logits - logits * labels,
+        math_ops.log1p(math_ops.exp(neg_abs_logits)),
+        name=name)
 
 def weighted_cel(
     _sentinel=None,
@@ -779,13 +846,15 @@ def weighted_cel(
     cond = (logits >= zeros)
     relu_logits = array_ops.where(cond, logits, zeros)
     not_relu_logits = array_ops.where(cond, zeros, logits)
-    neg_abs_logits = array_ops.where(cond, -logits, logits)
-    A = beta_p * (labels * (math_ops.log1p(1 + math_ops.exp(neg_abs_logits))  + not_relu_logits))
-    B = beta_n * ((1-labels) * (relu_logits + math_ops.log1p(1 + math_ops.exp(neg_abs_logits))))
+    abs_logits = math_ops.abs(logits)
+    A = beta_p * (labels * (math_ops.log1p(math_ops.exp(-abs_logits))  + not_relu_logits))
+    B = beta_n * ((1.0-labels) * (relu_logits + math_ops.log1p(math_ops.exp(-abs_logits))))
     return math_ops.add(A, B, name=name)
 
+
+
 def test_weighted_cel():
-    with tf.compat.v1.Session():
+    with tf1.Session():
         b = 64
         c = 14
         logits = tf.random.uniform([b, c], minval=-1, maxval=1)
@@ -795,8 +864,10 @@ def test_weighted_cel():
 if __name__ == "__main__":
 
     with strategy.scope():
-        
-        # @title Load tensorflow datasets: we use tensorflow flower dataset as an example
+
+        test_val = test_weighted_cel()
+        pass
+        # @title Load tensorflow datasets: we use tensorflow flower dataset as an examplegit
         batch_size = yml_config['finetuning']['batch']
         buffer_size = yml_config['finetuning']['buffer_size']
 
@@ -833,7 +904,7 @@ if __name__ == "__main__":
             .prefetch(tf.data.experimental.AUTOTUNE)
 
 
-        x_iter = tf.compat.v1.data.make_one_shot_iterator(x_ds)
+        x_iter = tf1.data.make_one_shot_iterator(x_ds)
         x_init = x_iter.make_initializer(x_ds)
         x = x_iter.get_next()
 
@@ -853,15 +924,15 @@ if __name__ == "__main__":
 
         # Attach a trainable linear layer to adapt for the new task.
         if dataset_name == 'tf_flowers':
-            with tf.compat.v1.variable_scope('head_supervised_new', reuse=tf.compat.v1.AUTO_REUSE):
-                logits_t = tf.compat.v1.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
+            with tf1.variable_scope('head_supervised_new', reuse=tf1.AUTO_REUSE):
+                logits_t = tf1.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
             loss_t = tf.reduce_mean(input_tensor=tf.nn.softmax_cross_entropy_with_logits(
                 labels=tf.one_hot(x['label'], num_classes), logits=logits_t))
         elif dataset_name == 'chest_xray':
-            with tf.compat.v1.variable_scope('head_supervised_new', reuse=tf.compat.v1.AUTO_REUSE):
-                logits_t = tf.compat.v1.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
-                cross_entropy = weighted_cel(labels=x['label'], logits=logits_t)
-                #cross_entropy = sigmoid_cross_entropy_with_logits(labels=x['label'], logits=logits_t)
+            with tf1.variable_scope('head_supervised_new', reuse=tf1.AUTO_REUSE):
+                logits_t = tf1.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
+                # cross_entropy = weighted_cel(labels=x['label'], logits=logits_t)
+                cross_entropy = sigmoid_cross_entropy_with_logits(labels=x['label'], logits=logits_t)
                 loss_t = tf.reduce_mean(tf.reduce_sum(cross_entropy, axis=1))
 
 
@@ -871,134 +942,140 @@ if __name__ == "__main__":
             momentum=momentum,
             weight_decay=weight_decay,
             exclude_from_weight_decay=['batch_normalization', 'bias', 'head_supervised'])
-        variables_to_train = tf.compat.v1.trainable_variables()
+        variables_to_train = tf1.trainable_variables()
         train_op = optimizer.minimize(
-            loss_t, global_step=tf.compat.v1.train.get_or_create_global_step(),
+            loss_t, global_step=tf1.train.get_or_create_global_step(),
             var_list=variables_to_train)
 
         print('Variables to train:', variables_to_train)
         key  # The accessible tensor in the return dictionary
 
         # Add ops to save and restore all the variables.
-        sess = tf.compat.v1.Session()
-        ckpt = tf.compat.v1.train.Saver()
+        sess = tf1.Session()
+        ckpt = tf1.train.Saver()
         current_time = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
         directory = os.path.join(os.path.abspath('./output'), current_time)
         is_time_to_save_session = partial(model_ckpt.save_session, epoch_save_step, ckpt, output=directory)
         if load_ckpt is not None:
             ckpt.restore(sess, load_ckpt)
         else:
-            sess.run(tf.compat.v1.global_variables_initializer())
+            sess.run(tf1.global_variables_initializer())
 
         # @title We fine-tune the new *linear layer* for just a few iterations.
         epochs = yml_config['finetuning']['epochs']
 
-        with tf.name_scope('performance'):
-            current_time = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-            # train_log_dir = str(Path.cwd() / 'logs' / current_time / 'train')
-            tot_loss = tf.zeros([])
-            tot_acc = tf.zeros([])
-            tf_tot_acc_ph = tf.compat.v1.placeholder(tf.float32, shape=None, name='accuracy')
-            tf_tot_acc_summary = tf.compat.v1.summary.scalar('accuracy', tf_tot_acc_ph)
-            tf_tot_loss_ph = tf.compat.v1.placeholder(tf.float32, shape=None, name='loss')
-            tf_tot_auc_ph = tf.compat.v1.placeholder(tf.float32, shape=None, name='auc')
-            tf_tot_loss_summary = tf.compat.v1.summary.scalar('loss', tf_tot_loss_ph)
+        # with tf.name_scope('performance'):
+        current_time = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+        tf_labels = tf1.placeholder(tf.int32, shape=[batch_size,num_classes], name='accuracy')
+        # train_log_dir = str(Path.cwd() / 'logs' / current_time / 'train')
+        train_tot_loss = tf.zeros([])
+        tot_acc = tf.zeros([])
+        tf_tot_acc_ph = tf1.placeholder(tf.float32, shape=None, name='accuracy')
+        tf_tot_acc_summary = tf1.summary.scalar('accuracy', tf_tot_acc_ph)
+        tf_train_tot_loss_ph = tf1.placeholder(tf.float32, shape=None, name='loss')
+        tf_tot_auc_ph = tf1.placeholder(tf.float32, shape=None, name='auc')
+        tf_train_tot_loss_summary = tf1.summary.scalar('loss', tf_train_tot_loss_ph)
 
-            summary_op1 = tf.compat.v1.summary.text('Batch', tf.compat.v1.convert_to_tensor(str(batch_size)))
-            summary_op2 = tf.compat.v1.summary.text('Batch', tf.compat.v1.convert_to_tensor(str(yml_config['finetuning']['learning_rate'])))
+        hyper_param = []
+        for item in yml_config['finetuning']:
+            hyper_param.append(tf1.summary.text(str(item), tf.constant(str(yml_config['finetuning'][item])),'HyperParam'))
 
-            performance_summaries = tf.compat.v1.summary.merge([tf_tot_acc_summary, tf_tot_loss_summary])
-            summ_writer = tf.compat.v1.compat.v1.summary.FileWriter(Path(yml_config['tensorboard_path']) / current_time, sess.graph)
-
-
+        performance_summaries = tf1.summary.merge([tf_tot_acc_summary, tf_train_tot_loss_summary])
+        summ_writer = tf1.summary.FileWriter(Path(yml_config['tensorboard_path']) / current_time, sess.graph)
+        tf.summary.record_if(yml_config['tensorboard'])
         verbose_train_loop = 0
         np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
         with sess.as_default():
-            mlflow.set_tracking_uri(yml_config['mlflow_path'])
-            mlflow.set_experiment('fine_tuning')
-            with mlflow.start_run():
+            if yml_config['mlflow']:
+                mlflow.set_tracking_uri(yml_config['mlflow_path'])
+                mlflow.set_experiment('fine_tuning')
+                mlflow.start_run()
                 mlflow.log_param('TB_Timestamp', current_time)
                 mlflow.log_params(yml_config['finetuning'])
-                writer = tf.compat.v1.summary.FileWriter('./log', sess.graph)
-                for index, summary_op in enumerate([summary_op1, summary_op2]):
-                    text = sess.run(summary_op)
-                    writer.add_summary(text, index)
-                for it in range(epochs):
-                    # Init dataset iterator
-                    sess.run(x_init)
-                    tot_acc = tf.zeros([])
-                    tot_loss = tf.zeros([])
-                    all_labels = []
-                    all_logits = []
-                    for step in range(int(num_images / batch_size)):
-                        _, loss, image, logits, labels = sess.run(fetches=(train_op, loss_t, x['image'], logits_t, x['label']))
-                        tot_loss += loss
-                        all_labels.extend(labels)
-                        all_logits.extend(tf.sigmoid(logits).eval())
-                        if dataset_name == 'tf_flowers':
-                            pred = logits.argmax(-1)
-                            correct = np.sum(pred == labels)
-                            acc_per_class = np.array([correct / float(batch_size)])
-                        elif dataset_name == 'chest_xray':
-                            logits  = tf.sigmoid(logits)
-                            pred = tf.cast(logits > 0.5, tf.float32)
-                            acc = tf.reduce_mean(tf.reduce_min(tf.cast(tf.equal(pred, labels), tf.float32),axis=1))
-                            tot_acc += acc
-                            if verbose_train_loop:
-                                print(f" Logits: {logits[1].eval()} \n Pred: {pred[1].eval()} \n Labels:{labels[1]}\n ")
+            writer = tf1.summary.FileWriter('./log', sess.graph)
+            for index,summary_op in enumerate(hyper_param):
+                text = sess.run(summary_op)
+                summ_writer.add_summary(text, index)
+            for it in range(epochs):
+                # Init dataset iterator
+                sess.run(x_init)
+                tot_acc = tf.zeros([])
+                train_tot_loss = tf.zeros([])
+                all_labels = []
+                all_logits = []
+                for step in range(int(num_images / batch_size)):
+                    _, loss, image, logits, labels = sess.run(fetches=(train_op, loss_t, x['image'], logits_t, x['label']))
+                    tf_labels = tf.convert_to_tensor(labels)
+                    train_tot_loss += loss
+                    all_labels.extend(labels)
+                    #all_logits.extend(tf.sigmoid(logits).eval())
+                    a = tf.sigmoid(logits).eval()
+                    if dataset_name == 'tf_flowers':
+                        pred = logits.argmax(-1)
+                        correct = np.sum(pred == labels)
+                        acc_per_class = np.array([correct / float(batch_size)])
+                    elif dataset_name == 'chest_xray':
+                        logits  = tf.sigmoid(logits)
+                        pred = tf.cast(logits > 0.5, tf.float32)
+                        acc = tf.reduce_mean(tf.reduce_min(tf.cast(tf.equal(pred, labels), tf.float32),axis=1))
+                        tot_acc += acc
+                        if verbose_train_loop:
+                            print(f" Logits: {logits[1].eval()} \n Pred: {pred[1].eval()} \n Labels:{labels[1]}\n ")
 
-                        #The function roc_auc_score can result in a error (ValueError: Only one class present in y_true.
-                        # ROC AUC score is not defined in that) . The error occurred when each label has only one class
-                        # in the batch. For example, if all the samples in the batch has hernia +1, the error will occurred.I
-                        try:
-                            auc_cum = roc_auc_score(np.array(all_labels),np.array(all_logits))
-                        except:
-                            auc_cum = None
-
-                        print(f"[Epoch {it + 1} Iter {step}] Total Loss: {tot_loss} Loss: {loss} Batch Acc: {acc.eval()} \
-                                    Avg Cumulative ROC scores: {auc_cum}")
-
-                        # if verbose_train_loop:
-                        #     print(f"Acc per class: \n {acc_per_class}")
-
-                    epoch_acc = (tot_acc/int(num_images / batch_size))
-
+                    #The function roc_auc_score can result in a error (ValueError: Only one class present in y_true.
+                    # ROC AUC score is not defined in that) . The error occurred when each label has only one class
+                    # in the batch. For example, if all the samples in the batch has hernia +1, the error will occurred.I
                     try:
-                        epoch_auc = roc_auc_score(np.array(all_labels),np.array(all_logits), average=None)
-                        epoch_auc_mean = epoch_auc.mean()
-                        aucs = dict(zip(chest_xray.XR_LABELS.keys(),epoch_auc ))
-                        auc_scores = {'AUC ' + str(key): val for key, val in aucs.items()}
-
+                        auc_cum = roc_auc_score(np.array(all_labels),np.array(all_logits))
+                        # auc_cum = roc_auc_score(labels.astype(np.int64), a, multi_class='ovr')
+                        # auc_cum = tf.keras.metrics.AUC(tf_labels, logits)
                     except:
-                        epoch_auc= None
-                        epoch_auc_mean= None
+                        auc_cum = None
 
-                    print(f"[Epoch {it + 1} Loss: {tot_loss.eval()} Training Accuracy: {epoch_acc.eval()}, Training AUC: {epoch_auc},")
-                    # Is it time to save the session?
-                    is_time_to_save_session(it, sess)
+                    print(f"[Epoch {it + 1} Iter {step}] Total Loss: {train_tot_loss.eval()} Loss: {loss} Batch Acc: {acc.eval()} \
+                                Avg Cumulative ROC scores: {auc_cum}")
+
+                    # if verbose_train_loop:
+                    #     print(f"Acc per class: \n {acc_per_class}")
+
+                epoch_acc = (tot_acc/int(num_images / batch_size))
+
+                try:
+                    epoch_auc = roc_auc_score(np.array(all_labels),np.array(all_logits), average=None)
+                    epoch_auc_mean = epoch_auc.mean()
+                    aucs = dict(zip(chest_xray.XR_LABELS.keys(),epoch_auc ))
+                    auc_scores = {'AUC ' + str(key): val for key, val in aucs.items()}
+
+                except:
+                    epoch_auc= None
+                    epoch_auc_mean= None
+
+                print(f"[Epoch {it + 1} Loss: {train_tot_loss.eval()} Training Accuracy: {epoch_acc.eval()}, Training AUC: {epoch_auc},")
+                # Is it time to save the session?
+                is_time_to_save_session(it, sess)
 
 
-                    # ===================== Write Tensorboard summary ===============================
-                    # Execute the summaries defined above
-                    summ = sess.run(performance_summaries, feed_dict={tf_tot_acc_ph: epoch_acc.eval(),
-                                                                     tf_tot_loss_ph: tot_loss.eval(),
-                                                                     tf_tot_auc_ph: epoch_auc_mean})
+                # ===================== Write Tensorboard summary ===============================
+                # Execute the summaries defined above
+                summ = sess.run(performance_summaries, feed_dict={tf_tot_acc_ph: epoch_acc.eval(),
+                                                                 tf_train_tot_loss_ph: train_tot_loss.eval(),
+                                                                 tf_tot_auc_ph: epoch_auc_mean})
 
 
-                    # Write the obtained summaries to the file, so it can be displayed in the TensorBoard
-                    summ_writer.add_summary(summ, it)
+                # Write the obtained summaries to the file, so it can be displayed in the TensorBoard
+                summ_writer.add_summary(summ, it)
 
-                # ====================== Calculate the Validation Accuracy ==========================
+            # ====================== Calculate the Validation Accuracy ==========================
 
-                # This MLFLOW code is now saving training metrics. When the validation accuracy will be completed,
-                # we should save instead the validation/test metrics.
-                # The saving will occured only at the end of the finetuning
-
+            # This MLFLOW code is now saving training metrics. When the validation accuracy will be completed,
+            # we should save instead the validation/test metrics.
+            # The saving will occured only at the end of the finetuning
+            if yml_config['mlflow']:
                 mlflow.log_metric('Total Accuracy',epoch_acc.eval())
-                mlflow.log_metric('Total Loss',tot_loss.eval())
+                mlflow.log_metric('Total Loss',train_tot_loss.eval())
 
-                if epoch_auc is not None:
-                    mlflow.log_metrics(auc_scores)
+            if epoch_auc is not None:
+                mlflow.log_metrics(auc_scores)
                 
 
 
