@@ -9,6 +9,7 @@ import random
 from tensorflow.python.ops import io_ops
 from sklearn.preprocessing import MultiLabelBinarizer
 
+num_class = 14
 XR_LABELS = {
     'Atelectasis': 0,
     'Cardiomegaly': 1,
@@ -33,9 +34,9 @@ img_dtype = tf.float32
 # img_dtype = tf.int32
 
 def load_img(path, one_hot_labels, img_idx):
-    image_size=(224, 224)
-    num_channels=3
-    interpolation='bilinear'
+    image_size = (224, 224)
+    num_channels = 3
+    interpolation = 'bilinear'
 
     # Image
     img = io_ops.read_file(path)
@@ -68,7 +69,16 @@ def PrepareData(
     mlb = MultiLabelBinarizer(classes = list(XR_LABELS.keys()))
     one_hot_labels = mlb.fit_transform(labels_split)
 
-    # TODO change num classes
+    label_cardinality = np.zeros(num_class)
+    for col in range(one_hot_labels.shape[1]):
+        label_cardinality[col] = np.where(one_hot_labels[:,col] == 1)[0].shape[0]
+    np.count_nonzero(label_cardinality)
+    if np.count_nonzero(label_cardinality) != num_class:
+        print (f"At least one Class has no label instance in the data, class{np.where(label_cardinality == 0)[0].tolist()}")
+        print(f"Data_cnt: {one_hot_labels.shape[0]}")
+        raise RuntimeError("Not all Labels are present")
+        pass
+        # TODO change num classes
     # < YC use dict's len 29/10/2020>
     return (index_imgs, tf.convert_to_tensor(one_hot_labels, dtype=tf.float32), df[("Image Index")].values.tolist())
     
@@ -85,7 +95,7 @@ class XRayDataSet(tf.data.Dataset):
         config: typing.Dict[typing.AnyStr, typing.Any] = None,
         train: bool = True,
         seed: int = 1337,
-        split: float =  0.9,
+        split: float =  0.90,
         return_tf_dataset: bool = True,
     ):
         """
@@ -135,15 +145,16 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
 
     use_cache = False
-    # data_frame_path = "./NIH/Data_Entry_2017.csv"
-    data_path = "H:/data/chest-xray"
+    data_path = "../NIH"
+    # data_path = "H:/data/chest-xray"
+    cache_dir = './cache'
     config = dict()
     scratch_dir = None
     batch_size = 128
     buffer_size = 128 * 2
 
     if use_cache:
-        train_ds = XRayDataSet(img_data_path) \
+        train_ds = XRayDataSet(data_path) \
             .prefetch(tf.data.experimental.AUTOTUNE) \
             .batch(batch_size) \
             .cache(cache_dir + "/tf_learn_cache") \

@@ -61,7 +61,7 @@ import tensorflow_hub as hub
 import re
 import numpy as np
 import tensorflow as tf
-import tensorflow.compat.v1  as tf1
+import tensorflow.compat.v1 as tf1
 import mlflow
 from pathlib import Path
 print(tf.__version__)
@@ -87,8 +87,9 @@ except Exception:
 # tf1.enable_eager_execution(config=None, device_policy=None, execution_mode=None)
 
 # Processing device selection
-device_name = [x.name for x in device_lib.list_local_devices()
-                                                             if x.device_type == 'GPU']
+device_name = [x.name for x in device_lib.list_local_devices() if x.device_type == 'GPU']
+
+
 # if device_name != []:
 #   if device_name[0] == "/device:GPU:0":
 #       device_name = "/gpu:0"
@@ -102,13 +103,6 @@ if tf.config.list_physical_devices('gpu'):
 else:  # use default strategy
   strategy = tf.distribute.get_strategy()
 
-imagenet_int_to_str = {}
-
-# with open('./ilsvrc2012_wordnet_lemmas.txt', 'r') as f:
-#     for i in range(1000):
-#         row = f.readline()
-#         row = row.rstrip()
-#         imagenet_int_to_str.update({i: row})
 
 tf_flowers_labels = ['dandelion', 'daisy', 'tulips', 'sunflowers', 'roses']
 
@@ -116,6 +110,11 @@ tf_flowers_labels = ['dandelion', 'daisy', 'tulips', 'sunflowers', 'roses']
 
 FLAGS_color_jitter_strength = 0.3
 CROP_PROPORTION = 0.875  # Standard for ImageNet.
+
+# Profiler
+# tf.profiler.experimental.server.start(6009)
+# tf.profiler.experimental.client.trace('grpc://127.0.0.1:6009',
+#                                       'gs://local_dir', 2000)
 
 
 def random_apply(func, p, x):
@@ -861,12 +860,17 @@ def test_weighted_cel():
         labels = tf.cast(tf.random.uniform([b, c], minval=-1, maxval=1) > 0, tf.float32)
         loss = weighted_cel(labels=labels, logits=logits)
 
+def show_one_image(im):
+    plt.imshow(im)
+    plt.title("Test")
+    plt.axis("off")
+    plt.show()
+
 if __name__ == "__main__":
 
     with strategy.scope():
 
-        test_val = test_weighted_cel()
-        pass
+
         # @title Load tensorflow datasets: we use tensorflow flower dataset as an examplegit
         batch_size = yml_config['finetuning']['batch']
         buffer_size = yml_config['finetuning']['buffer_size']
@@ -937,11 +941,22 @@ if __name__ == "__main__":
 
 
         # Setup optimizer and training op.
-        optimizer = LARSOptimizer(
-            learning_rate,
-            momentum=momentum,
-            weight_decay=weight_decay,
-            exclude_from_weight_decay=['batch_normalization', 'bias', 'head_supervised'])
+        if yml_config['finetuning']['optimizer'] == 'adam':
+            optimizer = tf1.train.AdamOptimizer(
+                learning_rate,
+                beta1=0.9,
+                beta2=0.999,
+                epsilon=1e-08)
+        elif yml_config['finetuning']['optimizer'] == 'lars':
+            optimizer = LARSOptimizer(
+                learning_rate,
+                momentum=momentum,
+                weight_decay=weight_decay,
+                exclude_from_weight_decay=['batch_normalization', 'bias', 'head_supervised'])
+        else:
+            raise RuntimeError("Optimizer not supported")
+
+
         variables_to_train = tf1.trainable_variables()
         train_op = optimizer.minimize(
             loss_t, global_step=tf1.train.get_or_create_global_step(),
@@ -968,22 +983,30 @@ if __name__ == "__main__":
         current_time = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
         tf_labels = tf1.placeholder(tf.int32, shape=[batch_size,num_classes], name='accuracy')
         # train_log_dir = str(Path.cwd() / 'logs' / current_time / 'train')
-        train_tot_loss = tf.zeros([])
-        tot_acc = tf.zeros([])
-        tf_tot_acc_ph = tf1.placeholder(tf.float32, shape=None, name='accuracy')
-        tf_tot_acc_summary = tf1.summary.scalar('accuracy', tf_tot_acc_ph)
+        # train_tot_loss = tf.zeros([])
+        # tot_acc = tf.zeros([])
+        # tot_acc_per_class = tf.zeros([])
+        tf_tot_acc_all_ph = tf1.placeholder(tf.float32, shape=None, name='accuracy_all_labels')
+        tf_tot_acc_all_summary = tf1.summary.scalar('accuracy_all_labels', tf_tot_acc_all_ph)
+        tf_tot_acc_per_class_ph = tf1.placeholder(tf.float32, shape=None, name='accuracy_per_class')
+        tf_tot_acc_per_class_summary = tf1.summary.scalar('accuracy_per_class', tf_tot_acc_per_class_ph)
+        tf_tot_acc_class_avg_ph = tf1.placeholder(tf.float32, shape=None, name='accuracy_per_class_averaged')
+        tf_tot_acc_class_avg_summary = tf1.summary.scalar('accuracy_per_class_averaged', tf_tot_acc_class_avg_ph)
         tf_train_tot_loss_ph = tf1.placeholder(tf.float32, shape=None, name='loss')
-        tf_tot_auc_ph = tf1.placeholder(tf.float32, shape=None, name='auc')
         tf_train_tot_loss_summary = tf1.summary.scalar('loss', tf_train_tot_loss_ph)
+        tf_tot_auc_ph = tf1.placeholder(tf.float32, shape=None, name='auc')
+        tf_tot_auc_ph_summary = tf1.summary.scalar('auc', tf_tot_auc_ph)
+
+        performance_summaries = tf1.summary.merge(
+            [tf_tot_acc_all_summary, tf_tot_acc_class_avg_summary, tf_train_tot_loss_summary, tf_tot_auc_ph_summary])
 
         hyper_param = []
         for item in yml_config['finetuning']:
             hyper_param.append(tf1.summary.text(str(item), tf.constant(str(yml_config['finetuning'][item])),'HyperParam'))
 
-        performance_summaries = tf1.summary.merge([tf_tot_acc_summary, tf_train_tot_loss_summary])
         summ_writer = tf1.summary.FileWriter(Path(yml_config['tensorboard_path']) / current_time, sess.graph)
         tf.summary.record_if(yml_config['tensorboard'])
-        verbose_train_loop = 0
+        # Limit the precision of floats...
         np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
         with sess.as_default():
             if yml_config['mlflow']:
@@ -999,11 +1022,21 @@ if __name__ == "__main__":
             for it in range(epochs):
                 # Init dataset iterator
                 sess.run(x_init)
-                tot_acc = tf.zeros([])
+                # Accuracy all = All class must be Correct
+                # Accuracy per class = Score for each class
+                # Accuracy class average: the average of the accuracy per class
+                tot_acc_all = tf.zeros([])
+                tot_acc_per_class = tf.zeros([])
+                tot_acc_class_avg = tf.zeros([])
                 train_tot_loss = tf.zeros([])
+                epoch_acc_all = tf.zeros([])
+                epoch_acc_per_class = tf.zeros([])
+                epoch_acc_class_avg = tf.zeros([])
                 all_labels = []
                 all_logits = []
-                for step in range(int(num_images / batch_size)):
+                #show_one_image(x['image'][0].eval())
+                n_iter = int(num_images / batch_size)
+                for step in range(n_iter):
                     _, loss, image, logits, labels = sess.run(fetches=(train_op, loss_t, x['image'], logits_t, x['label']))
                     tf_labels = tf.convert_to_tensor(labels)
                     train_tot_loss += loss
@@ -1017,28 +1050,32 @@ if __name__ == "__main__":
                     elif dataset_name == 'chest_xray':
                         logits  = tf.sigmoid(logits)
                         pred = tf.cast(logits > 0.5, tf.float32)
-                        acc = tf.reduce_mean(tf.reduce_min(tf.cast(tf.equal(pred, labels), tf.float32),axis=1))
-                        tot_acc += acc
-                        if verbose_train_loop:
-                            print(f" Logits: {logits[1].eval()} \n Pred: {pred[1].eval()} \n Labels:{labels[1]}\n ")
+                        acc_all = tf.reduce_mean(tf.reduce_min(tf.cast(tf.equal(pred, labels), tf.float32),axis=1))
+                        acc_per_class = tf.reduce_mean(tf.cast(tf.equal(pred, labels).eval(), tf.float32), axis=0)
+                        acc_class_avg = tf.reduce_mean(acc_per_class)
+                        tot_acc_all += acc_all
+                        tot_acc_per_class += acc_per_class
+                        tot_acc_class_avg += acc_class_avg
+                        # if verbose_train_loop:
+                        #     print(f" Logits: {logits[1].eval()} \n Pred: {pred[1].eval()} \n Labels:{labels[1]}\n ")
 
                     #The function roc_auc_score can result in a error (ValueError: Only one class present in y_true.
                     # ROC AUC score is not defined in that) . The error occurred when each label has only one class
                     # in the batch. For example, if all the samples in the batch has hernia +1, the error will occurred.I
                     try:
                         auc_cum = roc_auc_score(np.array(all_labels),np.array(all_logits))
-                        # auc_cum = roc_auc_score(labels.astype(np.int64), a, multi_class='ovr')
-                        # auc_cum = tf.keras.metrics.AUC(tf_labels, logits)
                     except:
                         auc_cum = None
 
-                    print(f"[Epoch {it + 1} Iter {step}] Total Loss: {train_tot_loss.eval()} Loss: {loss} Batch Acc: {acc.eval()} \
-                                Avg Cumulative ROC scores: {auc_cum}")
+                    if yml_config['verbose_train_loop']:
+                        print(f"[Epoch {it + 1} Iter {step}] Total Loss: {np.float32(train_tot_loss.eval())} Loss: {np.float32(loss)} Batch Acc: {np.float32(acc_all.eval())}"
+                              f"Acc Avg(class): {np.float32(acc_class_avg.eval())} Acc/class: {np.float32(acc_per_class.eval())} Avg Cumulative ROC scores: {np.float32(auc_cum)}")
 
-                    # if verbose_train_loop:
-                    #     print(f"Acc per class: \n {acc_per_class}")
 
-                epoch_acc = (tot_acc/int(num_images / batch_size))
+                epoch_acc_all = (tot_acc_all/n_iter)
+                epoch_acc_per_class = (tot_acc_per_class / n_iter)
+                epoch_acc_class_avg = (tot_acc_class_avg / n_iter)
+
 
                 try:
                     epoch_auc = roc_auc_score(np.array(all_labels),np.array(all_logits), average=None)
@@ -1050,16 +1087,21 @@ if __name__ == "__main__":
                     epoch_auc= None
                     epoch_auc_mean= None
 
-                print(f"[Epoch {it + 1} Loss: {train_tot_loss.eval()} Training Accuracy: {epoch_acc.eval()}, Training AUC: {epoch_auc},")
+                print(f"[Epoch {it + 1} Loss: {np.float32(train_tot_loss.eval())} Train Acc: {np.float32(epoch_acc_all.eval())}, Train Acc Avg(class) {np.float32(epoch_acc_class_avg.eval())}"
+                      f" Train Acc/class{np.float32(epoch_acc_per_class.eval())} Train AUC: {epoch_auc},")
                 # Is it time to save the session?
                 is_time_to_save_session(it, sess)
 
 
                 # ===================== Write Tensorboard summary ===============================
                 # Execute the summaries defined above
-                summ = sess.run(performance_summaries, feed_dict={tf_tot_acc_ph: epoch_acc.eval(),
-                                                                 tf_train_tot_loss_ph: train_tot_loss.eval(),
-                                                                 tf_tot_auc_ph: epoch_auc_mean})
+
+                summ = sess.run(performance_summaries, feed_dict={tf_tot_acc_all_ph: epoch_acc_all.eval(),
+                                                                  tf_tot_acc_class_avg_ph: epoch_acc_class_avg.eval(),
+                                                                  tf_train_tot_loss_ph: train_tot_loss.eval(),
+                                                                  tf_tot_auc_ph: epoch_auc_mean})
+
+
 
 
                 # Write the obtained summaries to the file, so it can be displayed in the TensorBoard
@@ -1071,7 +1113,8 @@ if __name__ == "__main__":
             # we should save instead the validation/test metrics.
             # The saving will occured only at the end of the finetuning
             if yml_config['mlflow']:
-                mlflow.log_metric('Total Accuracy',epoch_acc.eval())
+                mlflow.log_metric('Total Accuracy',epoch_acc_all.eval())
+                mlflow.log_metric('Total Accuracy/class', epoch_acc_per_class.eval())
                 mlflow.log_metric('Total Loss',train_tot_loss.eval())
 
             if epoch_auc is not None:

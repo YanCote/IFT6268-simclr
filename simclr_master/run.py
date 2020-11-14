@@ -262,7 +262,7 @@ flags.DEFINE_string(
     'The path to a checkpoint. From this checkpoint, a hub module is created.')
 
 flags.DEFINE_integer(
-    'num_classes', 15,
+    'num_classes', 14,
     'The number of classes to create the hub module from checkpoint_path.')
 
 
