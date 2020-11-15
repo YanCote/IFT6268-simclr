@@ -1032,20 +1032,20 @@ if __name__ == "__main__":
                 # Accuracy all = All class must be Correct
                 # Accuracy per class = Score for each class
                 # Accuracy class average: the average of the accuracy per class
-                tot_acc_all = tf.zeros([])
-                tot_acc_per_class = tf.zeros([])
-                tot_acc_class_avg = tf.zeros([])
+                tot_acc_all = 0.0
+                tot_acc_per_class = 0.0
+                tot_acc_class_avg = 0.0
                 train_tot_loss = 0.0
-                epoch_acc_all = tf.zeros([])
-                epoch_acc_per_class = tf.zeros([])
-                epoch_acc_class_avg = tf.zeros([])
-                all_labels = []
-                all_logits = []
+                epoch_acc_all = 0.0
+                epoch_acc_per_class = 0.0
+                epoch_acc_class_avg = 0.0
                 #show_one_image(x['image'][0].eval())
 
                 # =============== Main Loop (iteration) - START ===============
 
                 for step in range(n_iter):
+                    all_labels = []
+                    all_logits = []
                     start_time_iter = time.time()
                     _, loss, image, logits, labels = sess.run(fetches=(train_op, loss_t, x['image'], logits_t, x['label']))
                     # tf_labels = tf.convert_to_tensor(labels)
@@ -1057,19 +1057,25 @@ if __name__ == "__main__":
                         acc_per_class = np.array([correct / float(batch_size)])
                     elif dataset_name == 'chest_xray':
                         # # New compute
-                        # logits = scipy.special.expit(logits)
-                        # all_logits.extend(logits)
-
-                        # Old Compute
-                        all_logits.extend(tf.sigmoid(logits).eval())
-                        logits = tf.sigmoid(logits)
-                        pred = tf.cast(logits > 0.5, tf.float32)
-                        acc_all = tf.reduce_mean(tf.reduce_min(tf.cast(tf.equal(pred, labels), tf.float32),axis=1))
-                        acc_per_class = tf.reduce_mean(tf.cast(tf.equal(pred, labels).eval(), tf.float32), axis=0)
-                        acc_class_avg = tf.reduce_mean(acc_per_class)
+                        logits_sig = scipy.special.expit(logits)
+                        all_logits.extend(logits_sig)
+                        pred = (logits_sig > 0.5).astype(np.float32)
+                        acc_all = np.mean(np.min(np.equal(pred, labels).astype(np.float32), axis=1))
+                        acc_per_class = np.mean(np.equal(pred, labels).astype(np.float32), axis=0)
+                        acc_class_avg = np.mean(acc_per_class)
                         tot_acc_all += acc_all
                         tot_acc_per_class += acc_per_class
                         tot_acc_class_avg += acc_class_avg
+                        # Old Compute
+                        # all_logits.extend(tf.sigmoid(logits).eval())
+                        # logits = tf.sigmoid(logits)
+                        # pred = tf.cast(logits > 0.5, tf.float32)
+                        # acc_all = tf.reduce_mean(tf.reduce_min(tf.cast(tf.equal(pred, labels), tf.float32),axis=1))
+                        # acc_per_class = tf.reduce_mean(tf.cast(tf.equal(pred, labels).eval(), tf.float32), axis=0)
+                        # acc_class_avg = tf.reduce_mean(acc_per_class)
+                        # tot_acc_all += acc_all
+                        # tot_acc_per_class += acc_per_class
+                        # tot_acc_class_avg += acc_class_avg
                         # if verbose_train_loop:
                         #     print(f" Logits: {logits[1].eval()} \n Pred: {pred[1].eval()} \n Labels:{labels[1]}\n ")
 
@@ -1107,8 +1113,8 @@ if __name__ == "__main__":
                     epoch_auc= None
                     epoch_auc_mean= None
 
-                print(f"[Epoch {it + 1} Loss: {train_tot_loss} Train Acc: {np.float32(epoch_acc_all.eval())}, Train Acc Avg(class) {np.float32(epoch_acc_class_avg.eval())}"
-                      f" Train Acc/class{np.float32(epoch_acc_per_class.eval())} Train AUC: {epoch_auc_mean},")
+                print(f"[Epoch {it + 1} Loss: {train_tot_loss} Train Acc: {np.float32(epoch_acc_all)}, Train Acc Avg(class) {np.float32(epoch_acc_class_avg)}"
+                      f" Train Acc/class{np.float32(epoch_acc_per_class)} Train AUC: {epoch_auc_mean},")
                 # Is it time to save the session?
                 is_time_to_save_session(it, sess)
 
@@ -1120,9 +1126,9 @@ if __name__ == "__main__":
                 # ===================== Write Tensorboard summary ===============================
                 # Execute the summaries defined above
 
-                summ = sess.run(performance_summaries, feed_dict={tf_tot_acc_all_ph: epoch_acc_all.eval(),
-                                                                  tf_tot_acc_class_avg_ph: epoch_acc_class_avg.eval(),
-                                                                  tf_train_tot_loss_ph:train_tot_loss,
+                summ = sess.run(performance_summaries, feed_dict={tf_tot_acc_all_ph: epoch_acc_all,
+                                                                  tf_tot_acc_class_avg_ph: epoch_acc_class_avg,
+                                                                  tf_train_tot_loss_ph: train_tot_loss,
                                                                   tf_tot_auc_ph: epoch_auc_mean})
 
 
@@ -1139,8 +1145,8 @@ if __name__ == "__main__":
             # we should save instead the validation/test metrics.
             # The saving will occured only at the end of the finetuning
             if yml_config['mlflow']:
-                mlflow.log_metric('Total Accuracy',epoch_acc_all.eval())
-                mlflow.log_metric('Total Accuracy per class', tf.reduce_mean(epoch_acc_per_class).eval())
+                mlflow.log_metric('Total Accuracy',epoch_acc_all)
+                mlflow.log_metric('Total Accuracy per class', np.mean(epoch_acc_per_class))
                 mlflow.log_metric('Total Loss',train_tot_loss)
 
                 if epoch_auc is not None:
