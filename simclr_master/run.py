@@ -52,7 +52,7 @@ flags.DEFINE_boolean(
     'Is there multiple GPUs on the compute node')
 
 flags.DEFINE_float(
-    'learning_rate', 0.3,
+    'learning_rate', 0.1,
     'Initial learning rate per batch size of 256.')
 
 flags.DEFINE_enum(
@@ -250,16 +250,15 @@ flags.DEFINE_integer(
     'Input image size.')
 
 flags.DEFINE_float(
-    'color_jitter_strength', 1.0,
+    'color_jitter_strength', 0.5,
     'The strength of color jittering.')
 
 flags.DEFINE_boolean(
     'use_blur', True,
     'Whether or not to use Gaussian blur for augmentation during pretraining.')
 
-
 flags.DEFINE_string(
-    'checkpoint_path', ""#"H:/AI_Projects/outputs/runs/SimCLR/cluster_results/pretrain-simclr-img-ok/09-11-2020-11-31-20",
+    'checkpoint_path', "",
     'The path to a checkpoint. From this checkpoint, a hub module is created.')
 
 flags.DEFINE_integer(

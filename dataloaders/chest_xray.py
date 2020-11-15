@@ -41,7 +41,7 @@ def load_img(path, one_hot_labels, img_idx):
     img = io_ops.read_file(path)
     img = tf.compat.v1.image.decode_image(
         img, channels=num_channels, expand_animations=False)
-    #img = tf.compat.v1.image.resize(img, image_size)
+    #img = tf.compat.v1.image.resize(img, image_size, method=interpolation)
     #img.set_shape((image_size[0], image_size[1], num_channels))
 
     return {'image': img, 'label': one_hot_labels, 'idx': img_idx}

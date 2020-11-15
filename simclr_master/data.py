@@ -167,9 +167,9 @@ def build_input_fn(builder, is_training):
     def _input_fn(params):
         """Inner input function."""
         preprocess_fn_pretrain = get_preprocess_fn(
-            is_training, is_pretrain=True)
+            is_training, color_distort=True)
         preprocess_fn_finetune = get_preprocess_fn(
-            is_training, is_pretrain=False)
+            is_training, color_distort=False)
         num_classes = builder.info.features['label'].num_classes
 
         def map_fn(image, label):

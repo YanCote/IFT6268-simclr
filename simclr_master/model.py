@@ -111,6 +111,7 @@ def build_model_fn(model, num_classes, num_train_examples, batch_size):
 
         learning_rate = model_util.learning_rate_schedule(
             FLAGS.learning_rate, num_train_examples)
+        #learning_rate = FLAGS.learning_rate
 
         if is_training:
             if FLAGS.train_summary_steps > 0:
