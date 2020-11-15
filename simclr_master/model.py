@@ -169,30 +169,21 @@ def build_model_fn(model, num_classes, num_train_examples, batch_size):
             if FLAGS.checkpoint:
                 def scaffold_fn():
                     """Scaffold function to restore non-logits vars from checkpoint."""
-                    tf.train.init_from_checkpoint(
-                        FLAGS.checkpoint,
-                        {v.op.name: v.op.name
-                        for v in tf.global_variables(FLAGS.variable_schema)})
+                    tf.train.init_from_checkpoint( FLAGS.checkpoint, {v.op.name: v.op.name for v in tf.global_variables(FLAGS.variable_schema)})
 
                     if FLAGS.zero_init_logits_layer:
                         # Init op that initializes output layer parameters to zeros.
-                        output_layer_parameters = [
-                            var for var in tf.trainable_variables() if var.name.startswith(
-                                'head_supervised')]
-                        tf.logging.info('Initializing output layer parameters %s to zero',
-                                        [x.op.name for x in output_layer_parameters])
+                        output_layer_parameters = [ var for var in tf.trainable_variables() if var.name.startswith('head_supervised')]
+                        tf.logging.info('Initializing output layer parameters %s to zero',[x.op.name for x in output_layer_parameters])
                         with tf.control_dependencies([tf.global_variables_initializer()]):
-                            init_op = tf.group([
-                                tf.assign(x, tf.zeros_like(x))
-                                for x in output_layer_parameters])
+                            init_op = tf.group([tf.assign(x, tf.zeros_like(x)) for x in output_layer_parameters])
                         return tf.train.Scaffold(init_op=init_op)
                     else:
                         return tf.train.Scaffold()
             else:
                 scaffold_fn = None
 
-            return tf.estimator.tpu.TPUEstimatorSpec(
-                mode=mode, train_op=train_op, loss=loss, scaffold_fn=scaffold_fn)
+            return tf.estimator.tpu.TPUEstimatorSpec(mode=mode, train_op=train_op, loss=loss, scaffold_fn=scaffold_fn)
         else:
 
             def metric_fn(logits_sup, labels_sup, logits_con, labels_con, mask,

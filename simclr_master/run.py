@@ -131,7 +131,7 @@ flags.DEFINE_string(
     'Loading from the given checkpoint for continued training or fine-tuning.')
 
 flags.DEFINE_string(
-    'variable_schema', '?!global_step',
+    'variable_schema', 'global_step',
     'This defines whether some variable from the checkpoint should be loaded.')
 
 flags.DEFINE_bool(
