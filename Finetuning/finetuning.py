@@ -66,6 +66,7 @@ import mlflow
 from pathlib import Path
 import time
 import psutil
+import scipy
 print(tf.__version__)
 tf1.disable_eager_execution()
 # tf1.disable_v2_behavior()
@@ -984,16 +985,16 @@ if __name__ == "__main__":
         # ===============Tensor board section ===============
         # with tf.name_scope('performance'):
         current_time = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-        tf_labels = tf1.placeholder(tf.int32, shape=[batch_size,num_classes], name='accuracy')
-        tf_tot_acc_all_ph = tf1.placeholder(tf.float32, shape=None, name='accuracy_all_labels')
+        # tf_labels = tf1.placeholder(tf.int32, shape=[batch_size,num_classes], name='accuracy')
+        tf_tot_acc_all_ph = tf1.placeholder(tf.float32, shape=None, name='accuracy_all_labels_ph')
         tf_tot_acc_all_summary = tf1.summary.scalar('accuracy_all_labels', tf_tot_acc_all_ph)
-        tf_tot_acc_per_class_ph = tf1.placeholder(tf.float32, shape=None, name='accuracy_per_class')
+        tf_tot_acc_per_class_ph = tf1.placeholder(tf.float32, shape=None, name='accuracy_per_class_ph')
         tf_tot_acc_per_class_summary = tf1.summary.scalar('accuracy_per_class', tf_tot_acc_per_class_ph)
-        tf_tot_acc_class_avg_ph = tf1.placeholder(tf.float32, shape=None, name='accuracy_per_class_averaged')
+        tf_tot_acc_class_avg_ph = tf1.placeholder(tf.float32, shape=None, name='accuracy_per_class_averaged_ph')
         tf_tot_acc_class_avg_summary = tf1.summary.scalar('accuracy_per_class_averaged', tf_tot_acc_class_avg_ph)
-        tf_train_tot_loss_ph = tf1.placeholder(tf.float32, shape=None, name='loss')
-        tf_train_tot_loss_summary = tf1.summary.scalar('loss', tf_train_tot_loss_ph)
-        tf_tot_auc_ph = tf1.placeholder(tf.float32, shape=None, name='auc')
+        tf_train_tot_loss_ph = tf1.placeholder(tf.float32, shape=None, name='train_tot_loss')
+        tf_train_tot_loss_summary = tf1.summary.scalar('train_tot_loss', tf_train_tot_loss_ph)
+        tf_tot_auc_ph = tf1.placeholder(tf.float32, shape=None, name='auc_ph')
         tf_tot_auc_ph_summary = tf1.summary.scalar('auc', tf_tot_auc_ph)
 
         performance_summaries = tf1.summary.merge(
@@ -1034,7 +1035,7 @@ if __name__ == "__main__":
                 tot_acc_all = tf.zeros([])
                 tot_acc_per_class = tf.zeros([])
                 tot_acc_class_avg = tf.zeros([])
-                train_tot_loss = tf.zeros([])
+                train_tot_loss = 0.0
                 epoch_acc_all = tf.zeros([])
                 epoch_acc_per_class = tf.zeros([])
                 epoch_acc_class_avg = tf.zeros([])
@@ -1047,7 +1048,7 @@ if __name__ == "__main__":
                 for step in range(n_iter):
                     start_time_iter = time.time()
                     _, loss, image, logits, labels = sess.run(fetches=(train_op, loss_t, x['image'], logits_t, x['label']))
-                    tf_labels = tf.convert_to_tensor(labels)
+                    # tf_labels = tf.convert_to_tensor(labels)
                     train_tot_loss += loss
                     all_labels.extend(labels)
                     if dataset_name == 'tf_flowers':
@@ -1055,8 +1056,13 @@ if __name__ == "__main__":
                         correct = np.sum(pred == labels)
                         acc_per_class = np.array([correct / float(batch_size)])
                     elif dataset_name == 'chest_xray':
-                        logits  = tf.sigmoid(logits)
+                        # # New compute
+                        # logits = scipy.special.expit(logits)
+                        # all_logits.extend(logits)
+
+                        # Old Compute
                         all_logits.extend(tf.sigmoid(logits).eval())
+                        logits = tf.sigmoid(logits)
                         pred = tf.cast(logits > 0.5, tf.float32)
                         acc_all = tf.reduce_mean(tf.reduce_min(tf.cast(tf.equal(pred, labels), tf.float32),axis=1))
                         acc_per_class = tf.reduce_mean(tf.cast(tf.equal(pred, labels).eval(), tf.float32), axis=0)
@@ -1076,7 +1082,7 @@ if __name__ == "__main__":
                         auc_cum = None
 
                     if yml_config['finetuning']['verbose_train_loop']:
-                        print(f"[Epoch {it + 1} Iter {step}] Total Loss: {np.float32(train_tot_loss.eval())} Loss: {np.float32(loss)} Batch Acc: {np.float32(acc_all.eval())}"
+                        print(f"[Epoch {it + 1} Iter {step}] Total Loss: {train_tot_loss} Loss: {np.float32(loss)} Batch Acc: {np.float32(acc_all.eval())}"
                               f"Acc Avg(class): {np.float32(acc_class_avg.eval())} Acc/class: {np.float32(acc_per_class.eval())} Avg Cumulative ROC scores: {np.float32(auc_cum)}")
 
                     current_time_iter = time.time()
@@ -1101,7 +1107,7 @@ if __name__ == "__main__":
                     epoch_auc= None
                     epoch_auc_mean= None
 
-                print(f"[Epoch {it + 1} Loss: {np.float32(train_tot_loss.eval())} Train Acc: {np.float32(epoch_acc_all.eval())}, Train Acc Avg(class) {np.float32(epoch_acc_class_avg.eval())}"
+                print(f"[Epoch {it + 1} Loss: {train_tot_loss} Train Acc: {np.float32(epoch_acc_all.eval())}, Train Acc Avg(class) {np.float32(epoch_acc_class_avg.eval())}"
                       f" Train Acc/class{np.float32(epoch_acc_per_class.eval())} Train AUC: {epoch_auc_mean},")
                 # Is it time to save the session?
                 is_time_to_save_session(it, sess)
@@ -1116,7 +1122,7 @@ if __name__ == "__main__":
 
                 summ = sess.run(performance_summaries, feed_dict={tf_tot_acc_all_ph: epoch_acc_all.eval(),
                                                                   tf_tot_acc_class_avg_ph: epoch_acc_class_avg.eval(),
-                                                                  tf_train_tot_loss_ph: train_tot_loss.eval(),
+                                                                  tf_train_tot_loss_ph:train_tot_loss,
                                                                   tf_tot_auc_ph: epoch_auc_mean})
 
 
@@ -1135,7 +1141,7 @@ if __name__ == "__main__":
             if yml_config['mlflow']:
                 mlflow.log_metric('Total Accuracy',epoch_acc_all.eval())
                 mlflow.log_metric('Total Accuracy per class', tf.reduce_mean(epoch_acc_per_class).eval())
-                mlflow.log_metric('Total Loss',train_tot_loss.eval())
+                mlflow.log_metric('Total Loss',train_tot_loss)
 
                 if epoch_auc is not None:
                     mlflow.log_metrics(auc_scores)
