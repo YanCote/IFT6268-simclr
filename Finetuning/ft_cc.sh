@@ -50,6 +50,7 @@ pip3 install --no-index h5py
 pip3 install --no-index pyYAML
 pip3 install --no-index mlflow
 pip3 install --no-index scikit-learn
+pip3 install --no-index psutil
 
 echo -e 'Installing TensorFlow-Datasets ******************************\n'
 pip3 install --no-index ~/python_packages/tensorflow-datasets/googleapis_common_protos-1.52.0-py2.py3-none-any.whl

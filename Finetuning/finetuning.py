@@ -64,6 +64,8 @@ import tensorflow as tf
 import tensorflow.compat.v1 as tf1
 import mlflow
 from pathlib import Path
+import time
+import psutil
 print(tf.__version__)
 tf1.disable_eager_execution()
 # tf1.disable_v2_behavior()
@@ -979,13 +981,10 @@ if __name__ == "__main__":
         # @title We fine-tune the new *linear layer* for just a few iterations.
         epochs = yml_config['finetuning']['epochs']
 
+        # ===============Tensor board section ===============
         # with tf.name_scope('performance'):
         current_time = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
         tf_labels = tf1.placeholder(tf.int32, shape=[batch_size,num_classes], name='accuracy')
-        # train_log_dir = str(Path.cwd() / 'logs' / current_time / 'train')
-        # train_tot_loss = tf.zeros([])
-        # tot_acc = tf.zeros([])
-        # tot_acc_per_class = tf.zeros([])
         tf_tot_acc_all_ph = tf1.placeholder(tf.float32, shape=None, name='accuracy_all_labels')
         tf_tot_acc_all_summary = tf1.summary.scalar('accuracy_all_labels', tf_tot_acc_all_ph)
         tf_tot_acc_per_class_ph = tf1.placeholder(tf.float32, shape=None, name='accuracy_per_class')
@@ -1019,7 +1018,14 @@ if __name__ == "__main__":
             for index,summary_op in enumerate(hyper_param):
                 text = sess.run(summary_op)
                 summ_writer.add_summary(text, index)
+
+
+            n_iter = int(num_images / batch_size)
+            print(f"Batch:{batch_size}, n_iter:{n_iter} ")
+
+            # =============== Main Loop (epoch) - START ===============
             for it in range(epochs):
+                start_time_epoch = time.time()
                 # Init dataset iterator
                 sess.run(x_init)
                 # Accuracy all = All class must be Correct
@@ -1035,8 +1041,11 @@ if __name__ == "__main__":
                 all_labels = []
                 all_logits = []
                 #show_one_image(x['image'][0].eval())
-                n_iter = int(num_images / batch_size)
+
+                # =============== Main Loop (iteration) - START ===============
+
                 for step in range(n_iter):
+                    start_time_iter = time.time()
                     _, loss, image, logits, labels = sess.run(fetches=(train_op, loss_t, x['image'], logits_t, x['label']))
                     tf_labels = tf.convert_to_tensor(labels)
                     train_tot_loss += loss
@@ -1066,10 +1075,16 @@ if __name__ == "__main__":
                     except:
                         auc_cum = None
 
-                    if yml_config['verbose_train_loop']:
+                    if yml_config['finetuning']['verbose_train_loop']:
                         print(f"[Epoch {it + 1} Iter {step}] Total Loss: {np.float32(train_tot_loss.eval())} Loss: {np.float32(loss)} Batch Acc: {np.float32(acc_all.eval())}"
                               f"Acc Avg(class): {np.float32(acc_class_avg.eval())} Acc/class: {np.float32(acc_per_class.eval())} Avg Cumulative ROC scores: {np.float32(auc_cum)}")
 
+                    current_time_iter = time.time()
+                    elapsed_time_iter = current_time_iter - start_time_iter
+                    if not step % int((n_iter/5)):
+                        print(f"Finished iteration:{step} in: " + str(int(elapsed_time_iter)) + " sec")
+                        print(psutil.virtual_memory())
+                    # =============== Main Loop (iteration) - END ===============
 
                 epoch_acc_all = (tot_acc_all/n_iter)
                 epoch_acc_per_class = (tot_acc_per_class / n_iter)
@@ -1087,10 +1102,14 @@ if __name__ == "__main__":
                     epoch_auc_mean= None
 
                 print(f"[Epoch {it + 1} Loss: {np.float32(train_tot_loss.eval())} Train Acc: {np.float32(epoch_acc_all.eval())}, Train Acc Avg(class) {np.float32(epoch_acc_class_avg.eval())}"
-                      f" Train Acc/class{np.float32(epoch_acc_per_class.eval())} Train AUC: {epoch_auc},")
+                      f" Train Acc/class{np.float32(epoch_acc_per_class.eval())} Train AUC: {epoch_auc_mean},")
                 # Is it time to save the session?
                 is_time_to_save_session(it, sess)
 
+                current_time_epoch = time.time()
+                elapsed_time_iter = current_time_epoch - start_time_epoch
+                print(f"Finished EPOCH:{it} in: " + str(int(elapsed_time_iter)) + " sec")
+                # print(psutil.virtual_memory())
 
                 # ===================== Write Tensorboard summary ===============================
                 # Execute the summaries defined above
@@ -1106,18 +1125,20 @@ if __name__ == "__main__":
                 # Write the obtained summaries to the file, so it can be displayed in the TensorBoard
                 summ_writer.add_summary(summ, it)
 
-                # ====================== Calculate the Validation Accuracy ==========================
+                # =============== Main Loop (epoch) - END ===============
 
-                # This MLFLOW code is now saving training metrics. When the validation accuracy will be completed,
-                # we should save instead the validation/test metrics.
-                # The saving will occured only at the end of the finetuning
-                if yml_config['mlflow']:
-                    mlflow.log_metric('Total Accuracy',epoch_acc_all.eval())
-                    mlflow.log_metric('Total Accuracy per class', tf.reduce_mean(epoch_acc_per_class).eval())
-                    mlflow.log_metric('Total Loss',train_tot_loss.eval())
+            # ====================== Calculate the Validation Accuracy ==========================
 
-                    if epoch_auc is not None:
-                        mlflow.log_metrics(auc_scores)
+            # This MLFLOW code is now saving training metrics. When the validation accuracy will be completed,
+            # we should save instead the validation/test metrics.
+            # The saving will occured only at the end of the finetuning
+            if yml_config['mlflow']:
+                mlflow.log_metric('Total Accuracy',epoch_acc_all.eval())
+                mlflow.log_metric('Total Accuracy per class', tf.reduce_mean(epoch_acc_per_class).eval())
+                mlflow.log_metric('Total Loss',train_tot_loss.eval())
+
+                if epoch_auc is not None:
+                    mlflow.log_metrics(auc_scores)
 
 
 
