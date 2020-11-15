@@ -95,20 +95,20 @@ class XRayDataSet(tf.data.Dataset):
         config: typing.Dict[typing.AnyStr, typing.Any] = None,
         train: bool = True,
         seed: int = 1337,
-        split: float =  0.90,
+        split: float = 0.90,
+        train_ratio: float = 1.0,
         return_tf_dataset: bool = True,
     ):
         """
         Make sure to use same random seed for training and validation datasets so they respect the data split. 
         """
         df = pd.read_csv(os.path.join(data_path, "Data_Entry_2017.csv"))
-
         # Look at dataframe and split data, generate info
         if train:
             max_id = df["Patient ID"].max()
             possible_ids = range(1, max_id + 1)
             random.seed(seed)
-            split_ids = random.sample(possible_ids, int(max_id * split))
+            split_ids = random.sample(possible_ids, int(max_id * split * train_ratio))
             train_df = df[df["Patient ID"].isin(split_ids)]
             
             dataframe = train_df.sample(frac=1).reset_index(drop=True) # shuffle data

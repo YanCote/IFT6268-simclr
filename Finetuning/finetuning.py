@@ -889,8 +889,8 @@ if __name__ == "__main__":
                 data_path = yml_config['dataset']['chest_xray']
             else:
                 data_path = args.xray_path
-            train_dataset, tfds_info = chest_xray.XRayDataSet(data_path, config=None, train=True)
-            num_images = np.floor(yml_config['finetuning']['train_data_ratio'] * tfds_info['num_examples'])
+            train_dataset, tfds_info = chest_xray.XRayDataSet(data_path,train_ratio=yml_config['finetuning']['train_data_ratio'], config=None, train=True)
+            num_images = tfds_info['num_examples']
             num_classes = tfds_info['num_classes']
 
         print(f"Training: {num_images} images...")
@@ -905,7 +905,7 @@ if __name__ == "__main__":
             .map(_preprocess, deterministic=False) \
             .shuffle(buffer_size)\
             .batch(batch_size)\
-            .prefetch(tf.data.experimental.AUTOTUNE)
+            # .prefetch(tf.data.experimental.AUTOTUNE)
 
 
         x_iter = tf1.data.make_one_shot_iterator(x_ds)
@@ -1041,14 +1041,13 @@ if __name__ == "__main__":
                     tf_labels = tf.convert_to_tensor(labels)
                     train_tot_loss += loss
                     all_labels.extend(labels)
-                    #all_logits.extend(tf.sigmoid(logits).eval())
-                    a = tf.sigmoid(logits).eval()
                     if dataset_name == 'tf_flowers':
                         pred = logits.argmax(-1)
                         correct = np.sum(pred == labels)
                         acc_per_class = np.array([correct / float(batch_size)])
                     elif dataset_name == 'chest_xray':
                         logits  = tf.sigmoid(logits)
+                        all_logits.extend(tf.sigmoid(logits).eval())
                         pred = tf.cast(logits > 0.5, tf.float32)
                         acc_all = tf.reduce_mean(tf.reduce_min(tf.cast(tf.equal(pred, labels), tf.float32),axis=1))
                         acc_per_class = tf.reduce_mean(tf.cast(tf.equal(pred, labels).eval(), tf.float32), axis=0)
@@ -1107,18 +1106,18 @@ if __name__ == "__main__":
                 # Write the obtained summaries to the file, so it can be displayed in the TensorBoard
                 summ_writer.add_summary(summ, it)
 
-            # ====================== Calculate the Validation Accuracy ==========================
+                # ====================== Calculate the Validation Accuracy ==========================
 
-            # This MLFLOW code is now saving training metrics. When the validation accuracy will be completed,
-            # we should save instead the validation/test metrics.
-            # The saving will occured only at the end of the finetuning
-            if yml_config['mlflow']:
-                mlflow.log_metric('Total Accuracy',epoch_acc_all.eval())
-                mlflow.log_metric('Total Accuracy/class', epoch_acc_per_class.eval())
-                mlflow.log_metric('Total Loss',train_tot_loss.eval())
+                # This MLFLOW code is now saving training metrics. When the validation accuracy will be completed,
+                # we should save instead the validation/test metrics.
+                # The saving will occured only at the end of the finetuning
+                if yml_config['mlflow']:
+                    mlflow.log_metric('Total Accuracy',epoch_acc_all.eval())
+                    mlflow.log_metric('Total Accuracy per class', tf.reduce_mean(epoch_acc_per_class).eval())
+                    mlflow.log_metric('Total Loss',train_tot_loss.eval())
 
-            if epoch_auc is not None:
-                mlflow.log_metrics(auc_scores)
-                
+                    if epoch_auc is not None:
+                        mlflow.log_metrics(auc_scores)
+
 
 
