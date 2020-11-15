@@ -48,6 +48,7 @@ pip3 install --no-index termcolor
 pip3 install --no-index Markdown
 pip3 install --no-index h5py
 pip3 install --no-index pyYAML
+pip3 install --no-index mlflow
 pip3 install --no-index scikit-learn
 
 echo -e 'Installing TensorFlow-Datasets ******************************\n'

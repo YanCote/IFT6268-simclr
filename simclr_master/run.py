@@ -259,7 +259,7 @@ flags.DEFINE_boolean(
 
 flags.DEFINE_string(
     'checkpoint_path', "",
-    'The path to a checkpoint. From this checkpoint, an hub module is created.')
+    'The path to a checkpoint. From this checkpoint, a hub module is created.')
 
 flags.DEFINE_integer(
     'num_classes', 15,
@@ -300,6 +300,8 @@ def build_hub_module(model, num_classes, global_step, checkpoint_path):
             endpoints['logits_sup'] = logits_sup
         hub.add_signature(inputs=dict(images=inputs),
                           outputs=dict(endpoints, default=hiddens))
+        hub.add_signature(name="full-projection", inputs=dict(images=inputs),
+                          outputs=dict(endpoints, default=hiddens_proj))
 
     # Drop the non-supported non-standard graph collection.
     drop_collections = ['trainable_variables_inblock_%d' % d for d in range(6)]

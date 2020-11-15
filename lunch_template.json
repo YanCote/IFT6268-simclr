@@ -1,0 +1,23 @@
+{
+    "name": "Python: Finetune SimCLR",
+    "type": "python",
+    "request": "launch",
+    "program": "simclr_master/run.py",
+    "console": "integratedTerminal",
+    "args": [
+        "--local_tmp_folder=H:/data/chest-xray",
+        "--train_batch_size=2",
+        "--eval_batch_size=2",
+        "--model_dir=H:/AI_Projects/outputs/runs/SimCLR/test/finetune",
+        "--optimizer=adam",
+        "--use_multi_gpus=False",
+        
+        "--train_mode=finetune",
+        "--zero_init_logits_layer=True",
+        "--warmup_epochs=0",
+        "--weight_decay=0.0",
+        "--fine_tune_after_block=4",
+        "--ft_proj_selector=1",
+        "--checkpoint=H:/AI_Projects/outputs/runs/SimCLR/cluster_results/pretrain-simclr-img-ok/11-11-2020-11-55-03"
+    ]
+}

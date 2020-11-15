@@ -22,13 +22,14 @@ from __future__ import print_function
 import functools
 from absl import flags
 
-import data_util as data_util
+
 import tensorflow.compat.v1 as tf
 
 import os, sys
 if os.path.abspath(".") not in sys.path:
     sys.path.append(os.path.abspath("."))
 import dataloaders.chest_xray as chest_xray
+import simclr_master.data_util as data_util
 
 FLAGS = flags.FLAGS
 
@@ -109,7 +110,7 @@ def build_chest_xray_fn(use_multi_gpus, data_path, _, is_training):
     def _input_fn(params):
         """Inner input function."""
         preprocess_fn_pretrain = get_preprocess_fn(
-            is_training, color_distort=False) # Removed color distortion, since images are all in black and white
+            is_training, color_distort=True)
         preprocess_fn_finetune = get_preprocess_fn(
             is_training, color_distort=False)
 
@@ -117,16 +118,16 @@ def build_chest_xray_fn(use_multi_gpus, data_path, _, is_training):
             """Produces multiple transformations of the same batch."""
             image = data_point['image']
             label = data_point['label']
-            if FLAGS.train_mode == 'pretrain':
+            if FLAGS.train_mode == 'pretrain' or FLAGS.train_mode == 'eval':
                 xs = []
                 for _ in range(2):  # Two transformations
                     xs.append(preprocess_fn_pretrain(image))
                 image = tf.concat(xs, -1)
             else:
                 image = preprocess_fn_finetune(image)
-            return image, label, 1.0
+            return image, label, 1.0 #, data_point.get('idx')
         
-        def map_fn2(image, label, mask):
+        def map_fn2(image, label, mask, idx):
             return (image, {'labels':label, 'mask':mask})
 
         dataset, info = chest_xray.XRayDataSet(data_path, config=None, train=is_training)
