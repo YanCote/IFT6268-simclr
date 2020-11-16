@@ -849,7 +849,7 @@ def weighted_cel(
     relu_logits = array_ops.where(cond, logits, zeros)
     not_relu_logits = array_ops.where(cond, zeros, logits)
     abs_logits = math_ops.abs(logits)
-    A = beta_p * (labels * (math_ops.log1p(math_ops.exp(-abs_logits))  + not_relu_logits))
+    A = beta_p * (labels * (math_ops.log1p(math_ops.exp(-abs_logits)) - not_relu_logits))
     B = beta_n * ((1.0-labels) * (relu_logits + math_ops.log1p(math_ops.exp(-abs_logits))))
     return math_ops.add(A, B, name=name)
 
@@ -862,6 +862,7 @@ def test_weighted_cel():
         logits = tf.random.uniform([b, c], minval=-1, maxval=1)
         labels = tf.cast(tf.random.uniform([b, c], minval=-1, maxval=1) > 0, tf.float32)
         loss = weighted_cel(labels=labels, logits=logits)
+        pass
 
 def show_one_image(im):
     plt.imshow(im)
@@ -873,7 +874,7 @@ if __name__ == "__main__":
 
     with strategy.scope():
 
-
+        test_weighted_cel()
         # @title Load tensorflow datasets: we use tensorflow flower dataset as an examplegit
         batch_size = yml_config['finetuning']['batch']
         buffer_size = yml_config['finetuning']['buffer_size']
@@ -938,8 +939,8 @@ if __name__ == "__main__":
         elif dataset_name == 'chest_xray':
             with tf1.variable_scope('head_supervised_new', reuse=tf1.AUTO_REUSE):
                 logits_t = tf1.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
-                # cross_entropy = weighted_cel(labels=x['label'], logits=logits_t)
-                cross_entropy = sigmoid_cross_entropy_with_logits(labels=x['label'], logits=logits_t)
+                cross_entropy = weighted_cel(labels=x['label'], logits=logits_t)
+                #cross_entropy = sigmoid_cross_entropy_with_logits(labels=x['label'], logits=logits_t)
                 loss_t = tf.reduce_mean(tf.reduce_sum(cross_entropy, axis=1))
 
 
@@ -1088,9 +1089,8 @@ if __name__ == "__main__":
                         auc_cum = None
 
                     if yml_config['finetuning']['verbose_train_loop']:
-                        print(f"[Epoch {it + 1} Iter {step}] Total Loss: {train_tot_loss} Loss: {np.float32(loss)} Batch Acc: {np.float32(acc_all.eval())}"
-                              f"Acc Avg(class): {np.float32(acc_class_avg.eval())} Acc/class: {np.float32(acc_per_class.eval())} Avg Cumulative ROC scores: {np.float32(auc_cum)}")
-
+                        print(f"[Epoch {it + 1} Iter {step}] Total Loss: {train_tot_loss} Loss: {np.float32(loss)} Batch Acc: {np.float32(acc_all)}"
+                              f"Acc Avg(class): {np.float32(acc_class_avg)} Acc/class: {np.float32(acc_per_class)} Avg Cumulative ROC scores: {np.float32(auc_cum)}")
                     current_time_iter = time.time()
                     elapsed_time_iter = current_time_iter - start_time_iter
                     if not step % int((n_iter/5)):
