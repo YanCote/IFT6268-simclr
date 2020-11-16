@@ -874,7 +874,6 @@ if __name__ == "__main__":
 
     with strategy.scope():
 
-        test_weighted_cel()
         # @title Load tensorflow datasets: we use tensorflow flower dataset as an examplegit
         batch_size = yml_config['finetuning']['batch']
         buffer_size = yml_config['finetuning']['buffer_size']
@@ -1067,18 +1066,6 @@ if __name__ == "__main__":
                         tot_acc_all += acc_all
                         tot_acc_per_class += acc_per_class
                         tot_acc_class_avg += acc_class_avg
-                        # Old Compute
-                        # all_logits.extend(tf.sigmoid(logits).eval())
-                        # logits = tf.sigmoid(logits)
-                        # pred = tf.cast(logits > 0.5, tf.float32)
-                        # acc_all = tf.reduce_mean(tf.reduce_min(tf.cast(tf.equal(pred, labels), tf.float32),axis=1))
-                        # acc_per_class = tf.reduce_mean(tf.cast(tf.equal(pred, labels).eval(), tf.float32), axis=0)
-                        # acc_class_avg = tf.reduce_mean(acc_per_class)
-                        # tot_acc_all += acc_all
-                        # tot_acc_per_class += acc_per_class
-                        # tot_acc_class_avg += acc_class_avg
-                        # if verbose_train_loop:
-                        #     print(f" Logits: {logits[1].eval()} \n Pred: {pred[1].eval()} \n Labels:{labels[1]}\n ")
 
                     #The function roc_auc_score can result in a error (ValueError: Only one class present in y_true.
                     # ROC AUC score is not defined in that) . The error occurred when each label has only one class
@@ -1089,13 +1076,13 @@ if __name__ == "__main__":
                         auc_cum = None
 
                     if yml_config['finetuning']['verbose_train_loop']:
-                        print(f"[Epoch {it + 1} Iter {step}] Total Loss: {train_tot_loss} Loss: {np.float32(loss)} Batch Acc: {np.float32(acc_all)}"
+                        print(f"[Epoch {it + 1} Iter {step}] Total Loss: {train_tot_loss} Loss: {np.float32(loss)} Batch Acc: {np.float32(acc_all)} "
                               f"Acc Avg(class): {np.float32(acc_class_avg)} Acc/class: {np.float32(acc_per_class)} Avg Cumulative ROC scores: {np.float32(auc_cum)}")
                     current_time_iter = time.time()
                     elapsed_time_iter = current_time_iter - start_time_iter
-                    if not step % int((n_iter/5)):
-                        print(f"Finished iteration:{step} in: " + str(int(elapsed_time_iter)) + " sec")
-                        print(psutil.virtual_memory())
+                    # if not step % int((n_iter/5)):
+                    print(f"Finished iteration:{step} in: " + str(int(elapsed_time_iter)) + " sec")
+                        # print(psutil.virtual_memory())
                     # =============== Main Loop (iteration) - END ===============
 
                 epoch_acc_all = (tot_acc_all/n_iter)
