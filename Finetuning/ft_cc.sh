@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --time=10:00:00
+#SBATCH --time=0-10:00
 #SBATCH --gres=gpu:2
 #SBATCH --cpus-per-task=1
 #SBATCH --account=def-bengioy

@@ -1042,10 +1042,10 @@ if __name__ == "__main__":
                 #show_one_image(x['image'][0].eval())
 
                 # =============== Main Loop (iteration) - START ===============
-
+                all_labels = []
+                all_logits = []
                 for step in range(n_iter):
-                    all_labels = []
-                    all_logits = []
+
                     start_time_iter = time.time()
                     _, loss, image, logits, labels = sess.run(fetches=(train_op, loss_t, x['image'], logits_t, x['label']))
                     # tf_labels = tf.convert_to_tensor(labels)
@@ -1075,14 +1075,13 @@ if __name__ == "__main__":
                     except:
                         auc_cum = None
 
-                    if yml_config['finetuning']['verbose_train_loop']:
-                        print(f"[Epoch {it + 1} Iter {step}] Total Loss: {train_tot_loss} Loss: {np.float32(loss)} Batch Acc: {np.float32(acc_all)} "
-                              f"Acc Avg(class): {np.float32(acc_class_avg)} Acc/class: {np.float32(acc_per_class)} Avg Cumulative ROC scores: {np.float32(auc_cum)}")
                     current_time_iter = time.time()
                     elapsed_time_iter = current_time_iter - start_time_iter
-                    # if not step % int((n_iter/5)):
-                    print(f"Finished iteration:{step} in: " + str(int(elapsed_time_iter)) + " sec")
-                        # print(psutil.virtual_memory())
+
+                    if yml_config['finetuning']['verbose_train_loop']:
+                        print(f"[Epoch {it + 1}/{epochs} Iter: {step}/{n_iter}] Total Loss: {train_tot_loss} Loss: {np.float32(loss)} Batch Acc: {np.float32(acc_all)} "
+                              f"Acc Avg(class): {np.float32(acc_class_avg)}")
+                        print(f"Finished iteration:{step} in: " + str(int(elapsed_time_iter)) + " sec")
                     # =============== Main Loop (iteration) - END ===============
 
                 epoch_acc_all = (tot_acc_all/n_iter)
@@ -1100,8 +1099,8 @@ if __name__ == "__main__":
                     epoch_auc= None
                     epoch_auc_mean= None
 
-                print(f"[Epoch {it + 1} Loss: {train_tot_loss} Train Acc: {np.float32(epoch_acc_all)}, Train Acc Avg(class) {np.float32(epoch_acc_class_avg)}"
-                      f" Train Acc/class{np.float32(epoch_acc_per_class)} Train AUC: {epoch_auc_mean},")
+                print(f"[Epoch {it + 1}/{epochs} Loss: {train_tot_loss} Train Acc: {np.float32(epoch_acc_all)}, Train Acc Avg(class) {np.float32(epoch_acc_class_avg)}"
+                      f" Train AUC: {epoch_auc_mean} AOC/Class {epoch_auc},")
                 # Is it time to save the session?
                 is_time_to_save_session(it, sess)
 
