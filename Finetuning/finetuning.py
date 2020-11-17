@@ -1125,6 +1125,7 @@ if __name__ == "__main__":
 
                 # =============== Main Loop (epoch) - END ===============
 
+            print(f"Training Done")
             # ====================== Calculate the Validation Accuracy ==========================
 
             # This MLFLOW code is now saving training metrics. When the validation accuracy will be completed,

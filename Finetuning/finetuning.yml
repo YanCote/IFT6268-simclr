@@ -4,7 +4,7 @@ output_dir: 'output'
 tensorboard: True
 tensorboard_path: /home/yancote1/tb  #/Users/shanelgauthier/Documents/UDEM/Self-Supervised Learning/t
 mlflow_path: /home/yancote1/mlruns   #/Users/shanelgauthier/Documents/UDEM/Self-Supervised Learning/mlruns
-mlflow: False
+mlflow: True
 imagenet_lemma_path: ./Finetuning/ilsvrc2012_wordnet_lemmas.txt
 
 enum:
