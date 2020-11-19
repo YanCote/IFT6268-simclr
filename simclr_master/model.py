@@ -70,7 +70,7 @@ def build_model_fn(model, num_classes, num_train_examples, batch_size):
         # Add head and loss.
         if FLAGS.train_mode == 'pretrain':
             tpu_context = params['context'] if 'context' in params else None
-            hiddens_proj = model_util.projection_head(hiddens, is_training)
+            hiddens_proj, _ = model_util.projection_head(hiddens, is_training)
             contrast_loss, logits_con, labels_con = obj_lib.add_contrastive_loss(
                 hiddens_proj,
                 hidden_norm=FLAGS.hidden_norm,

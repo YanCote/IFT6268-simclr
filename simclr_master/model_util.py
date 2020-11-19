@@ -175,7 +175,7 @@ def projection_head(hiddens, is_training, name='head_contrastive'):
             # for checkpoint compatibility, whole projection head is built here.
             # but you can select part of projection head during fine-tuning.
             hiddens = hiddens_list[FLAGS.ft_proj_selector]
-    return hiddens
+    return hiddens, hiddens_list
 
 
 def supervised_head(hiddens, num_classes, is_training, name='head_supervised'):

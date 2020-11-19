@@ -291,7 +291,7 @@ def build_hub_module(model, num_classes, global_step, checkpoint_path):
                 endpoints[v] = tf.get_default_graph().get_tensor_by_name(
                     'base_model/{}:0'.format(v))
         if FLAGS.train_mode == 'pretrain':
-            hiddens_proj = model_util.projection_head(hiddens, is_training)
+            hiddens_proj, list_proj_heads = model_util.projection_head(hiddens, is_training)
             endpoints['proj_head_input'] = hiddens
             endpoints['proj_head_output'] = hiddens_proj
         else:
@@ -300,8 +300,11 @@ def build_hub_module(model, num_classes, global_step, checkpoint_path):
             endpoints['logits_sup'] = logits_sup
         hub.add_signature(inputs=dict(images=inputs),
                           outputs=dict(endpoints, default=hiddens))
-        hub.add_signature(name="full-projection", inputs=dict(images=inputs),
-                          outputs=dict(endpoints, default=hiddens_proj))
+        if FLAGS.train_mode == 'pretrain':
+            hub.add_signature(name="full-projection", inputs=dict(images=inputs),
+                            outputs=dict(endpoints, default=list_proj_heads[-1]))
+            hub.add_signature(name="projection-head-1", inputs=dict(images=inputs),
+                            outputs=dict(endpoints, default=list_proj_heads[1]))
 
     # Drop the non-supported non-standard graph collection.
     drop_collections = ['trainable_variables_inblock_%d' % d for d in range(6)]
@@ -381,21 +384,6 @@ def main(argv):
     # Enable training summary.
     if FLAGS.train_summary_steps > 0:
         tf.config.set_soft_device_placement(True)
-
-    # Test multiple virtual gpus
-    #gpus = tf.config.experimental.list_physical_devices('GPU')
-    #if gpus:
-    #    # Create 2 virtual GPUs with 1GB memory each
-    #    try:
-    #        tf.config.experimental.set_virtual_device_configuration(
-    #            gpus[0],
-    #            [tf.config.experimental.VirtualDeviceConfiguration(memory_limit=2048),
-    #            tf.config.experimental.VirtualDeviceConfiguration(memory_limit=2048)])
-    #        logical_gpus = tf.config.experimental.list_logical_devices('GPU')
-    #        print(len(gpus), "Physical GPU,", len(logical_gpus), "Logical GPUs")
-    #    except RuntimeError as e:
-    #        # Virtual devices must be set before GPUs have been initialized
-    #        print(e)
 
     # Choose dataset. 
     if FLAGS.dataset == "chest_xray":
@@ -517,5 +505,5 @@ def create_module_from_checkpoints(args):
 
 if __name__ == '__main__':
     tf.disable_v2_behavior()  # Disable eager mode when running with TF2.
-    #app.run(create_module_from_checkpoints)
-    app.run(main)
+    app.run(create_module_from_checkpoints)
+    #app.run(main)

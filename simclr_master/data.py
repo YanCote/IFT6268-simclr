@@ -127,7 +127,7 @@ def build_chest_xray_fn(use_multi_gpus, data_path, _, is_training):
                 image = preprocess_fn_finetune(image)
             return image, label, 1.0 #, data_point.get('idx')
         
-        def map_fn2(image, label, mask, idx):
+        def map_fn2(image, label, mask):
             return (image, {'labels':label, 'mask':mask})
 
         dataset, info = chest_xray.XRayDataSet(data_path, config=None, train=is_training)
