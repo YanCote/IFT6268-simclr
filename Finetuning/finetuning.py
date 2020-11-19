@@ -925,7 +925,7 @@ if __name__ == "__main__":
 
         # Load the base network and set it to non-trainable (for speedup fine-tuning)
         hub_path = os.path.abspath('./r50_1x_sk0/hub/')
-        hub_path = yml_config['finetuning']['model_path']
+        hub_path = yml_config['finetuning']['hub_path']
         module = hub.Module(hub_path, trainable=yml_config['finetuning']['train_resnet'])
         key = module(inputs=x['image'], signature="default", as_dict=True)
 

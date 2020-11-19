@@ -1,50 +1,13 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# ##### Copyright 2020 Google LLC.
-
-# In[1]:
-
-
-#@title Licensed under the Apache License, Version 2.0 (the "License");
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-# https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
-
-# <a href="https://colab.research.google.com/github/google-research/simclr/blob/master/colabs/load_and_inference.ipynb" target="_parent"><img src="https://colab.research.google.com/assets/colab-badge.svg" alt="Open In Colab"/></a>
-# 
-
-# ## SimCLR: A Simple Framework for Contrastive Learning of Visual Representations
-# 
-# This colab demonstrates how to load pretrained/finetuned SimCLR models from checkpoints or hub modules. It contains two parts:
-# 
-# * Part I - Load checkpoints and print parameters (count)
-# * Part II - Load hub module for inference
-# 
-# The checkpoints are accessible in the following Google Cloud Storage folders.
-# 
-# * Pretrained SimCLRv2 models with a linear classifier: [gs://simclr-checkpoints/simclrv2/pretrained](https://console.cloud.google.com/storage/browser/simclr-checkpoints/simclrv2/pretrained)
-# * Fine-tuned SimCLRv2 models on 1% of labels: [gs://simclr-checkpoints/simclrv2/finetuned_1pct](https://console.cloud.google.com/storage/browser/simclr-checkpoints/simclrv2/finetuned_1pct)
-# * Fine-tuned SimCLRv2 models on 10% of labels: [gs://simclr-checkpoints/simclrv2/finetuned_10pct](https://console.cloud.google.com/storage/browser/simclr-checkpoints/simclrv2/finetuned_10pct)
-# * Fine-tuned SimCLRv2 models on 100% of labels: [gs://simclr-checkpoints/simclrv2/finetuned_100pct](https://console.cloud.google.com/storage/browser/simclr-checkpoints/simclrv2/finetuned_100pct)
-# * Supervised models with the same architectures: [gs://simclr-checkpoints/simclrv2/pretrained](https://console.cloud.google.com/storage/browser/simclr-checkpoints/simclrv2/pretrained)
-# 
-# Use the corresponding checkpoint / hub-module paths for accessing the model. For example, to use a pre-trained model (with a linear classifier) with ResNet-152 (2x+SK), set the path to `gs://simclr-checkpoints/simclrv2/pretrained/r152_2x_sk1`.
-
-# In[2]:
-
-
 import re
 import numpy as np
+
+import os, sys
+if os.path.abspath(".") not in sys.path:
+    sys.path.append(os.path.abspath("."))
+
+import dataloaders.chest_xray as chest_xray
+
+import argparse
 
 import tensorflow.compat.v1 as tf
 tf.disable_eager_execution()
@@ -53,6 +16,24 @@ import tensorflow_datasets as tfds
 
 import matplotlib
 import matplotlib.pyplot as plt
+import yaml
+
+
+# Argument Parsing
+parser = argparse.ArgumentParser(description='inference on SimClrv2')
+parser.add_argument('--config', '-c', default='configuration.yml', required=False,
+                   help='yml configuration file')
+parser.add_argument('--xray_path', default='', required=False,
+                    help='yml configuration file')
+args = parser.parse_args()
+
+# Yaml configuration files
+try:
+    with open(args.config) as f:
+        yml_config = yaml.load(f, Loader=yaml.FullLoader)
+except Exception:
+    raise RuntimeError(f"Configuration file {args.config} do not exist")
+
 
 
 # ## Part I - Load checkpoints and print parameters (count)
@@ -78,6 +59,7 @@ def count_params(checkpoint, excluding_vars=[], verbose=True):
   return cnt
 
 checkpoint_path = 'gs://simclr-checkpoints/simclrv2/finetuned_100pct/r50_1x_sk0/'
+checkpoint_path = yml_config['inference']['checkpoint_path']
 checkpoint = tf.train.load_checkpoint(checkpoint_path)
 _ = count_params(checkpoint, excluding_vars=['global_step', "Momentum", 'ema', 'memory', 'head'], verbose=False)
 
@@ -90,7 +72,6 @@ _ = count_params(checkpoint, excluding_vars=['global_step', "Momentum", 'ema', '
 #@title Load class id to label text mapping from big_transfer (hidden)
 # Code snippet credit: https://github.com/google-research/big_transfer
 
-get_ipython().system('wget https://storage.googleapis.com/bit_models/ilsvrc2012_wordnet_lemmas.txt')
 
 imagenet_int_to_str = {}
 
@@ -574,6 +555,7 @@ x = tf.data.make_one_shot_iterator(x).get_next()
 #@title Load module and get the computation graph
 
 hub_path = 'gs://simclr-checkpoints/simclrv2/finetuned_100pct/r50_1x_sk0/hub/'
+hub_path = yml_config['finetuning']['hub_path']
 module = hub.Module(hub_path, trainable=False)
 key = module(inputs=x['image'], signature="default", as_dict=True)
 logits_t = key['logits_sup'][:, :]
@@ -607,4 +589,7 @@ for i in range(5):
     axes[i].text(0, 0, 'Attention: the predictions here are inaccurate as they are constrained among 1000 ImageNet classes.\n', c='r')
   axes[i].axis('off')
   axes[i].text(256, 128, 'Truth: ' + true_text + '\n' + 'Pred: ' + pred_text)
+
+plt.show()
+pass
 
