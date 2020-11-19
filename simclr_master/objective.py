@@ -20,6 +20,10 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow.compat.v1 as tf
+from tensorflow.python.ops import math_ops
+from tensorflow.python.ops import array_ops
+from tensorflow.python.ops import nn_ops
+from tensorflow.python.framework import ops
 
 from tensorflow.compiler.tf2xla.python import xla  # pylint: disable=g-direct-tensorflow-import
 
@@ -28,8 +32,9 @@ LARGE_NUM = 1e9
 
 def add_supervised_loss(labels, logits, weights, **kwargs):
   """Compute loss for model and add it to loss collection."""
-  return tf.losses.softmax_cross_entropy(labels, logits, weights, **kwargs)
-
+  #return tf.losses.softmax_cross_entropy(labels, logits, weights, **kwargs)
+  return weighted_cel(labels=labels, logits=logits, weights=weights, **kwargs)
+  
 
 def add_contrastive_loss(hidden,
                          hidden_norm=True,
@@ -122,3 +127,79 @@ def tpu_cross_replica_concat(tensor, tpu_context=None):
     # The first dimension size will be: tensor.shape[0] * num_replicas
     # Using [-1] trick to support also scalar input.
     return tf.reshape(ext_tensor, [-1] + ext_tensor.shape.as_list()[2:])
+
+
+def weighted_cel(
+    _sentinel=None,
+    labels=None,
+    logits=None,
+    weights=None,
+    name=None):
+  """
+  Inspired strongly by tensorflow :sigmoid_cross_entropy_with_logits
+  https://github.com/tensorflow/tensorflow/blob/v2.3.1/tensorflow/python/ops/nn_impl.py#L196-L244
+
+  Version with weighted CEL(Cross-Entropy Loss)
+  https://arxiv.org/pdf/1705.02315
+
+  Starting from CEL from TF
+  For brevity, let `x = logits`, `z = labels`.  The logistic loss is
+        z * -log(sigmoid(x)) + (1 - z) * -log(1 - sigmoid(x))
+      = z * -log(1 / (1 + exp(-x))) + (1 - z) * -log(exp(-x) / (1 + exp(-x)))
+      = z * log(1 + exp(-x)) + (1 - z) * (-log(exp(-x)) + log(1 + exp(-x)))
+      = z * log(1 + exp(-x)) + (1 - z) * (x + log(1 + exp(-x))                   (4)
+      = (1 - z) * x + log(1 + exp(-x))
+      = x - x * z + log(1 + exp(-x))
+  For x < 0, to avoid overflow in exp(-x), we reformulate the above
+        x - x * z + log(1 + exp(-x))
+      = log(exp(x)) - x * z + log(1 + exp(-x))
+      = - x * z + log(1 + exp(x))
+  Hence, to ensure stability and avoid overflow, the implementation uses this
+  equivalent formulation
+      max(x, 0) - x * z + log(1 + exp(-abs(x)))
+
+  weighted CEL:
+  For x > 0 (from (4)):
+   = B_p * [z * -log( 1 + exp(-x) )] + B_n * [(1 - z) * (x + log(1 + exp(-x)))]
+  For x < 0 (from (4)):
+   = B_p * [z * log( exp(x) / (1 + exp(x)) )] + B_n * [(1 - z) *(x + log( exp(x) / (1 + exp(x))))]
+   = B_p * [z * log(1 + exp(x)) - x] + B_n * [(1 - z) * log( (1 + exp(x))))]
+  Hence, to ensure stability and avoid overflow, the implementation uses this
+  equivalent formulation
+   = B_p * [z * log(1 + exp(-x)) + min(0,x) ] + B_n * [(1 - z) * (max(0,x) + log( (1 + exp(-x)))))]
+
+  Args:
+    _sentinel: Used to prevent positional parameters. Internal, do not use.
+    labels: A `Tensor` of the same type and shape as `logits`.
+    logits: A `Tensor` of type `float32` or `float64`.
+    name: A name for the operation (optional).
+  Returns:
+    A `Tensor` of the same shape as `logits` with the componentwise
+    logistic losses.
+  Raises:
+    ValueError: If `logits` and `labels` do not have the same shape.
+  """
+  nn_ops._ensure_xent_args("sigmoid_cross_entropy_with_logits", _sentinel,
+                           labels, logits)
+
+  with ops.name_scope(name, "weighted_logistic_loss", [logits, labels]) as name:
+    logits = ops.convert_to_tensor(logits, name="logits")
+    labels = ops.convert_to_tensor(labels, name="labels")
+    try:
+      labels.get_shape().merge_with(logits.get_shape())
+    except ValueError:
+      raise ValueError("logits and labels must have the same shape (%s vs %s)" %
+                       (logits.get_shape(), labels.get_shape()))
+
+    cnt_one = tf.cast(tf.reduce_sum(labels),tf.float32)
+    cnt_zero = tf.cast(tf.size(logits),tf.float32) - cnt_one
+    beta_p = (cnt_one + cnt_zero) / cnt_one
+    beta_n = (cnt_one + cnt_zero) / cnt_zero
+    zeros = array_ops.zeros_like(logits, dtype=logits.dtype)
+    cond = (logits >= zeros)
+    relu_logits = array_ops.where(cond, logits, zeros)
+    not_relu_logits = array_ops.where(cond, zeros, logits)
+    neg_abs_logits = array_ops.where(cond, -logits, logits)
+    A = beta_p * (labels * (math_ops.log1p(1 + math_ops.exp(neg_abs_logits))  + not_relu_logits))
+    B = beta_n * ((1-labels) * (relu_logits + math_ops.log1p(1 + math_ops.exp(neg_abs_logits))))
+    return math_ops.add(A, B, name=name)
