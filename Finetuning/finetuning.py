@@ -982,6 +982,7 @@ if __name__ == "__main__":
         # @title We fine-tune the new *linear layer* for just a few iterations.
         epochs = yml_config['finetuning']['epochs']
 
+
         # ===============Tensor board section ===============
         # with tf.name_scope('performance'):
         current_time = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
@@ -1008,7 +1009,7 @@ if __name__ == "__main__":
         tf.summary.record_if(yml_config['tensorboard'])
         # Limit the precision of floats...
         np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
-        with sess.as_default():
+        with sess.as_default() as scope:
             if yml_config['mlflow']:
                 mlflow.set_tracking_uri(yml_config['mlflow_path'])
                 mlflow.set_experiment('fine_tuning')
@@ -1126,18 +1127,17 @@ if __name__ == "__main__":
                 # =============== Main Loop (epoch) - END ===============
 
             print(f"Training Done")
-            # ====================== Calculate the Validation Accuracy ==========================
+
 
             # This MLFLOW code is now saving training metrics. When the validation accuracy will be completed,
             # we should save instead the validation/test metrics.
             # The saving will occured only at the end of the finetuning
             if yml_config['mlflow']:
-                mlflow.log_metric('Total Accuracy',epoch_acc_all)
-                mlflow.log_metric('Total Accuracy per class', np.mean(epoch_acc_per_class))
-                mlflow.log_metric('Total Loss',train_tot_loss)
+                mlflow.log_metric('Total Train Accuracy',epoch_acc_all)
+                mlflow.log_metric('Total Train Accuracy per class', np.mean(epoch_acc_per_class))
+                mlflow.log_metric('Total Train Loss',train_tot_loss)
 
                 if epoch_auc is not None:
                     mlflow.log_metrics(auc_scores)
-
 
 

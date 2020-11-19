@@ -265,6 +265,11 @@ flags.DEFINE_integer(
     'num_classes', 14,
     'The number of classes to create the hub module from checkpoint_path.')
 
+flags.DEFINE_bool(
+    'create_hub', False,
+    'IF True create a hub from a checkpoint in flags.checkpoint... else run main app')    
+
+
 
 def build_hub_module(model, num_classes, global_step, checkpoint_path):
     """Create TF-Hub module."""
@@ -377,111 +382,115 @@ def main(argv):
     if len(argv) > 1:
         raise app.UsageError('Too many command-line arguments.')
 
-    if not os.path.exists(FLAGS.model_dir):
-        os.makedirs(FLAGS.model_dir)
-        print("Created directory: {0}".format(os.path.abspath(FLAGS.model_dir)))
-
-    # Enable training summary.
-    if FLAGS.train_summary_steps > 0:
-        tf.config.set_soft_device_placement(True)
-
-    # Choose dataset. 
-    if FLAGS.dataset == "chest_xray":
-        # Not really a builder, but it's compatible
-        # TODO config
-        data_path = FLAGS.local_tmp_folder
-        builder, info = chest_xray.XRayDataSet(data_path, config=None, train=True, return_tf_dataset=False, split=0.05)
-        build_input_fn = partial(data_lib.build_chest_xray_fn, FLAGS.use_multi_gpus, data_path)
-        num_train_examples = info.get('num_examples')
-        num_classes = info.get('num_classes')
-        num_eval_examples = info.get('num_eval_examples')
+    if FLAGS.create_hub:
+        app.run(create_module_from_checkpoints)
     else:
-        #builder = tfds.builder(FLAGS.dataset, data_dir=FLAGS.data_dir)
-        builder.download_and_prepare()
-        num_train_examples = builder.info.splits[FLAGS.train_split].num_examples
-        num_eval_examples = builder.info.splits[FLAGS.eval_split].num_examples
-        num_classes = builder.info.features['label'].num_classes
-        build_input_fn = data_lib.build_input_fn
 
-    train_steps = model_util.get_train_steps(num_train_examples)
-    eval_steps = int(math.ceil(num_eval_examples / FLAGS.eval_batch_size))
-    epoch_steps = int(round(num_train_examples / FLAGS.train_batch_size))
+        if not os.path.exists(FLAGS.model_dir):
+            os.makedirs(FLAGS.model_dir)
+            print("Created directory: {0}".format(os.path.abspath(FLAGS.model_dir)))    
+                
+        # Enable training summary.
+        if FLAGS.train_summary_steps > 0:
+            tf.config.set_soft_device_placement(True)
 
-    resnet.BATCH_NORM_DECAY = FLAGS.batch_norm_decay
-    model = resnet.resnet_v1(
-        resnet_depth=FLAGS.resnet_depth,
-        width_multiplier=FLAGS.width_multiplier,
-        cifar_stem=FLAGS.image_size <= 32)
-
-    checkpoint_steps = (
-        FLAGS.checkpoint_steps or (FLAGS.checkpoint_epochs * epoch_steps))
-
-    cluster = None
-    if FLAGS.use_tpu and FLAGS.master is None:
-        if FLAGS.tpu_name:
-            cluster = tf.distribute.cluster_resolver.TPUClusterResolver(
-                FLAGS.tpu_name, zone=FLAGS.tpu_zone, project=FLAGS.gcp_project)
+        # Choose dataset. 
+        if FLAGS.dataset == "chest_xray":
+            # Not really a builder, but it's compatible
+            # TODO config
+            data_path = FLAGS.local_tmp_folder
+            builder, info = chest_xray.XRayDataSet(data_path, config=None, train=True, return_tf_dataset=False, split=0.05)
+            build_input_fn = partial(data_lib.build_chest_xray_fn, FLAGS.use_multi_gpus, data_path)
+            num_train_examples = info.get('num_examples')
+            num_classes = info.get('num_classes')
+            num_eval_examples = info.get('num_eval_examples')
         else:
-            cluster = tf.distribute.cluster_resolver.TPUClusterResolver()
-            tf.config.experimental_connect_to_cluster(cluster)
-            tf.tpu.experimental.initialize_tpu_system(cluster)
+            #builder = tfds.builder(FLAGS.dataset, data_dir=FLAGS.data_dir)
+            builder.download_and_prepare()
+            num_train_examples = builder.info.splits[FLAGS.train_split].num_examples
+            num_eval_examples = builder.info.splits[FLAGS.eval_split].num_examples
+            num_classes = builder.info.features['label'].num_classes
+            build_input_fn = data_lib.build_input_fn
 
-    strategy = tf.distribute.MirroredStrategy() if not FLAGS.use_tpu and FLAGS.use_multi_gpus else None # Multi GPU?
-    print("use_multi_gpus: {0}".format(FLAGS.use_multi_gpus))
-    print("use MirroredStrategy: {0}".format(not FLAGS.use_tpu and FLAGS.use_multi_gpus))
-    default_eval_mode = tf.estimator.tpu.InputPipelineConfig.PER_HOST_V1
-    sliced_eval_mode = tf.estimator.tpu.InputPipelineConfig.SLICED
-    run_config = tf.estimator.tpu.RunConfig(
-        tpu_config=tf.estimator.tpu.TPUConfig(
-            iterations_per_loop=checkpoint_steps,
-            eval_training_input_configuration=sliced_eval_mode
-            if FLAGS.use_tpu else default_eval_mode),
-        model_dir=FLAGS.model_dir,
-        train_distribute=strategy, 
-        eval_distribute=strategy,
-        save_summary_steps=checkpoint_steps,
-        save_checkpoints_steps=checkpoint_steps,
-        keep_checkpoint_max=FLAGS.keep_checkpoint_max,
-        master=FLAGS.master,
-        cluster=cluster)
-    estimator = tf.estimator.tpu.TPUEstimator(
-        model_lib.build_model_fn(model, num_classes, num_train_examples, FLAGS.train_batch_size),
-        config=run_config,
-        train_batch_size=FLAGS.train_batch_size,
-        eval_batch_size=FLAGS.eval_batch_size,
-        use_tpu=FLAGS.use_tpu)
+        train_steps = model_util.get_train_steps(num_train_examples)
+        eval_steps = int(math.ceil(num_eval_examples / FLAGS.eval_batch_size))
+        epoch_steps = int(round(num_train_examples / FLAGS.train_batch_size))
+
+        resnet.BATCH_NORM_DECAY = FLAGS.batch_norm_decay
+        model = resnet.resnet_v1(
+            resnet_depth=FLAGS.resnet_depth,
+            width_multiplier=FLAGS.width_multiplier,
+            cifar_stem=FLAGS.image_size <= 32)
+
+        checkpoint_steps = (
+            FLAGS.checkpoint_steps or (FLAGS.checkpoint_epochs * epoch_steps))
+
+        cluster = None
+        if FLAGS.use_tpu and FLAGS.master is None:
+            if FLAGS.tpu_name:
+                cluster = tf.distribute.cluster_resolver.TPUClusterResolver(
+                    FLAGS.tpu_name, zone=FLAGS.tpu_zone, project=FLAGS.gcp_project)
+            else:
+                cluster = tf.distribute.cluster_resolver.TPUClusterResolver()
+                tf.config.experimental_connect_to_cluster(cluster)
+                tf.tpu.experimental.initialize_tpu_system(cluster)
+
+        strategy = tf.distribute.MirroredStrategy() if not FLAGS.use_tpu and FLAGS.use_multi_gpus else None # Multi GPU?
+        print("use_multi_gpus: {0}".format(FLAGS.use_multi_gpus))
+        print("use MirroredStrategy: {0}".format(not FLAGS.use_tpu and FLAGS.use_multi_gpus))
+        default_eval_mode = tf.estimator.tpu.InputPipelineConfig.PER_HOST_V1
+        sliced_eval_mode = tf.estimator.tpu.InputPipelineConfig.SLICED
+        run_config = tf.estimator.tpu.RunConfig(
+            tpu_config=tf.estimator.tpu.TPUConfig(
+                iterations_per_loop=checkpoint_steps,
+                eval_training_input_configuration=sliced_eval_mode
+                if FLAGS.use_tpu else default_eval_mode),
+            model_dir=FLAGS.model_dir,
+            train_distribute=strategy, 
+            eval_distribute=strategy,
+            save_summary_steps=checkpoint_steps,
+            save_checkpoints_steps=checkpoint_steps,
+            keep_checkpoint_max=FLAGS.keep_checkpoint_max,
+            master=FLAGS.master,
+            cluster=cluster)
+        estimator = tf.estimator.tpu.TPUEstimator(
+            model_lib.build_model_fn(model, num_classes, num_train_examples, FLAGS.train_batch_size),
+            config=run_config,
+            train_batch_size=FLAGS.train_batch_size,
+            eval_batch_size=FLAGS.eval_batch_size,
+            use_tpu=FLAGS.use_tpu)
+            
+
+        # save flags for this experiment
         
+        FLAGS.append_flags_into_file(os.path.join(FLAGS.model_dir, 'experiment_flags.txt'))
 
-    # save flags for this experiment
-    
-    FLAGS.append_flags_into_file(os.path.join(FLAGS.model_dir, 'experiment_flags.txt'))
-
-    # Train/Eval
-    if FLAGS.mode == 'eval':
-        for ckpt in tf.train.checkpoints_iterator(
-                run_config.model_dir, min_interval_secs=15):
-            try:
-                result = perform_evaluation(
+        # Train/Eval
+        if FLAGS.mode == 'eval':
+            for ckpt in tf.train.checkpoints_iterator(
+                    run_config.model_dir, min_interval_secs=15):
+                try:
+                    result = perform_evaluation(
+                        estimator=estimator,
+                        input_fn=build_input_fn(builder, False),
+                        eval_steps=eval_steps,
+                        model=model,
+                        num_classes=num_classes,
+                        checkpoint_path=ckpt)
+                except tf.errors.NotFoundError:
+                    continue
+                if result['global_step'] >= train_steps:
+                    return
+        else:
+            estimator.train(
+                build_input_fn(builder, True), max_steps=train_steps)
+            if FLAGS.mode == 'train_then_eval':
+                perform_evaluation(
                     estimator=estimator,
                     input_fn=build_input_fn(builder, False),
                     eval_steps=eval_steps,
                     model=model,
-                    num_classes=num_classes,
-                    checkpoint_path=ckpt)
-            except tf.errors.NotFoundError:
-                continue
-            if result['global_step'] >= train_steps:
-                return
-    else:
-        estimator.train(
-            build_input_fn(builder, True), max_steps=train_steps)
-        if FLAGS.mode == 'train_then_eval':
-            perform_evaluation(
-                estimator=estimator,
-                input_fn=build_input_fn(builder, False),
-                eval_steps=eval_steps,
-                model=model,
-                num_classes=num_classes)
+                    num_classes=num_classes)
 
 
 def create_module_from_checkpoints(args):
@@ -505,5 +514,4 @@ def create_module_from_checkpoints(args):
 
 if __name__ == '__main__':
     tf.disable_v2_behavior()  # Disable eager mode when running with TF2.
-    app.run(create_module_from_checkpoints)
-    #app.run(main)
+    app.run(main)
