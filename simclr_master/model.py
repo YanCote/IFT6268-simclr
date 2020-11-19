@@ -36,7 +36,7 @@ def build_model_fn(model, num_classes, num_train_examples, batch_size):
     def model_fn(features, labels, mode, params=None):
         """Build model and optimizer."""
         is_training = mode == tf.estimator.ModeKeys.TRAIN
-
+        print(f"num_classes:{num_classes},batch_size:{batch_size} ")
         # Check training mode.
         if FLAGS.train_mode == 'pretrain':
             num_transforms = 2
@@ -63,7 +63,7 @@ def build_model_fn(model, num_classes, num_train_examples, batch_size):
                 # Finetune just supervised (linear) head will not update BN stats.
                 model_train_mode = False
             else:
-                # Pretrain or finetuen anything else will update BN stats.
+                # Pretrain or finetune anything else will update BN stats.
                 model_train_mode = is_training
             hiddens = model(features, is_training=model_train_mode)
 
@@ -79,8 +79,8 @@ def build_model_fn(model, num_classes, num_train_examples, batch_size):
             logits_sup = tf.zeros([batch_size, num_classes]) # we don't need this when pretrainning
         else:
             contrast_loss = tf.zeros([])
-            logits_con = tf.zeros([params['batch_size'], 10])
-            labels_con = tf.zeros([params['batch_size'], 10])
+            logits_con = tf.zeros([params['batch_size'], num_classes])
+            labels_con = tf.zeros([params['batch_size'], num_classes])
             hiddens = model_util.projection_head(hiddens, is_training)
             logits_sup = model_util.supervised_head(
                 hiddens, num_classes, is_training)
@@ -201,6 +201,9 @@ def build_model_fn(model, num_classes, num_train_examples, batch_size):
                     weights=mask)
                 metrics['contrastive_top_5_accuracy'] = tf.metrics.recall_at_k(
                     tf.argmax(labels_con, 1), logits_con, k=5, weights=mask)
+                # metrics['epoch_auc_mean'] = tf.metrics.auc(
+                #     labels=labels_sup, predictions=logits_con, weights=mask)                    
+
                 return metrics
 
             metrics = {
@@ -208,6 +211,7 @@ def build_model_fn(model, num_classes, num_train_examples, batch_size):
                 'labels_sup': labels['labels'],
                 'logits_con': logits_con,
                 'labels_con': labels_con,
+                # 'batch_auc_mean': batch_auc_mean,
                 'mask': labels['mask'],
                 'contrast_loss': tf.fill((params['batch_size'],), contrast_loss),
                 'regularization_loss': tf.fill((params['batch_size'],),
