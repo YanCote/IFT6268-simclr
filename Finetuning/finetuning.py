@@ -53,7 +53,7 @@ import yaml
 from tensorflow.python.client import device_lib
 from sklearn.metrics import roc_auc_score
 import matplotlib.pyplot as plt
-import datetime
+from datetime import datetime
 import tensorflow_datasets as tfds
 import tensorflow_hub as hub
 import re
@@ -68,8 +68,8 @@ from Finetuning.package import *
 print(tf.__version__)
 tf1.disable_eager_execution()
 from shutil import rmtree
-
-
+from functools import partial
+import simclr_master.resnet as resnet
 
 # Argument Parsing
 parser = argparse.ArgumentParser(description='Finetuning on SimClrv2')
@@ -134,6 +134,7 @@ def show_one_image(im):
     plt.axis("off")
     plt.show()
 
+
 if __name__ == "__main__":
 
     with strategy.scope():
@@ -194,7 +195,7 @@ if __name__ == "__main__":
         load_Saver = yml_config['finetuning'].get('load_Saver')
 
         # Load the base network and set it to non-trainable (for speedup fine-tuning)
-        hub_path = yml_config['finetuning']['pretrained_hub_path']
+        hub_path = str(Path(yml_config['finetuning']['pretrained_hub_path']).resolve())
         module = hub.Module(hub_path, trainable=yml_config['finetuning']['train_resnet'])
         key = module(inputs=x['image'], signature="default", as_dict=True)
 
@@ -206,7 +207,8 @@ if __name__ == "__main__":
                 labels=tf.one_hot(x['label'], num_classes), logits=logits_t))
         elif dataset_name == 'chest_xray':
             with tf1.variable_scope('head_supervised_new', reuse=tf1.AUTO_REUSE):
-                logits_t = tf1.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
+                #logits_t = tf1.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
+                logits_t = tf1.layers.dense(inputs=key['proj_head_output'], units=num_classes)
                 cross_entropy = weighted_cel(labels=x['label'], logits=logits_t)
                 #cross_entropy = sigmoid_cross_entropy_with_logits(labels=x['label'], logits=logits_t)
                 loss_t = tf.reduce_mean(tf.reduce_sum(cross_entropy, axis=1))
@@ -411,6 +413,20 @@ if __name__ == "__main__":
                     mlflow.log_metrics(auc_scores)
 
             rmtree(str(Path.cwd() / yml_config['finetuning']['finetuned_cp']))
-            Saver.save(sess=sess,save_path=str(Path.cwd() / yml_config['finetuning']['finetuned_cp'] / 'pt'), global_step=step)
+            ckpt_pt = Saver.save(sess=sess,save_path=str(Path.cwd() / yml_config['finetuning']['finetuned_cp'] / 'pt'), global_step=step)
             print(f"Final Chekpoint Saved in {yml_config['finetuning']['finetuned_cp']}")
-            module.export(str(Path(yml_config['finetuning']['finetuned_cp']) / 'hub'), sess)
+            # module.export(str(Path(yml_config['finetuning']['finetuned_cp']) / 'hub'), sess)
+
+            # model = resnet.resnet_v1(
+            #     resnet_depth= 50,
+            #     width_multiplier= 1,
+            #     cifar_stem=32)
+            #
+            # # save the model in the same folder as the checkpoints
+            # # FLAGS.model_dir = FLAGS.checkpoint_path
+            # print('Start: Creating Hub Module from FLAGS.checkpoint_path')
+            # global_step = int(re.search('[0-9]+$',ckpt_pt).group(0))
+            # build_hub_module(model, num_classes,
+            #                  global_step=global_step,
+            #                  checkpoint_path=str(Path(yml_config['finetuning']['finetuned_cp'])))
+            # print('Hub Module Created')

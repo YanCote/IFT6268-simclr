@@ -58,7 +58,6 @@ def count_params(checkpoint, excluding_vars=[], verbose=True):
     print("Total number of parameters: {:.2f}M".format(cnt))
     return cnt
 
-checkpoint_path = 'gs://simclr-checkpoints/simclrv2/finetuned_100pct/r50_1x_sk0/'
 checkpoint_path = yml_config['inference']['checkpoint_path']
 checkpoint = tf.train.load_checkpoint(checkpoint_path)
 _ = count_params(checkpoint, excluding_vars=['global_step', "Momentum", 'ema', 'memory', 'head'], verbose=False)

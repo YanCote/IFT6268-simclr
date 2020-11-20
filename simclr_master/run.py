@@ -21,7 +21,7 @@ from __future__ import print_function
 
 import json
 import math
-import os, sys
+import os, sys, re
 from absl import app
 from absl import flags
 from functools import partial
@@ -504,7 +504,12 @@ def create_module_from_checkpoints(args):
     #save the model in the same folder as the checkpoints
     #FLAGS.model_dir = FLAGS.checkpoint_path
     print('Start: Creating Hub Module from FLAGS.checkpoint_path')
-    global_step = int(FLAGS.checkpoint_path[-1])
+    # global_step = int(FLAGS.checkpoint_path[-1])
+    # directories = os.listdir( FLAGS.checkpoint_path )
+    # for file in directories:
+    #     if 'index' in file:
+    #         global_step = int(re.search('[0-9]+$',file.rstrip('.index')).group(0))  
+    global_step = 1  
     build_hub_module(model, FLAGS.num_classes,
                      global_step = global_step,
                      checkpoint_path= FLAGS.checkpoint_path)
