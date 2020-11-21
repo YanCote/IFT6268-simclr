@@ -34,6 +34,8 @@ finetuning:
     pretrained_model        : 'ImageNet'
     # Output: Finetuned Model
     finetuned_cp            :  ''
+    # To load a specefic chekpoint
+    # load_ckpt: '<PATH_TO_FILE>'
 
 
 inference:
