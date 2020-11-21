@@ -79,8 +79,8 @@ def build_model_fn(model, num_classes, num_train_examples, batch_size):
             logits_sup = tf.zeros([batch_size, num_classes]) # we don't need this when pretrainning
         else:
             contrast_loss = tf.zeros([])
-            logits_con = tf.zeros([params['batch_size'], 10])
-            labels_con = tf.zeros([params['batch_size'], 10])
+            logits_con = tf.zeros([params['batch_size'], num_classes])
+            labels_con = tf.zeros([params['batch_size'], num_classes])
             hiddens, _ = model_util.projection_head(hiddens, is_training)
             logits_sup = model_util.supervised_head(
                 hiddens, num_classes, is_training)

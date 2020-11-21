@@ -335,6 +335,8 @@ def build_hub_module(model, num_classes, global_step, checkpoint_path):
         for step_to_delete in exported_steps[:-FLAGS.keep_hub_module_max]:
             tf.io.gfile.rmtree(os.path.join(
                 hub_export_dir, str(step_to_delete)))
+    
+    return hub_export_dir
 
 
 def perform_evaluation(estimator, input_fn, eval_steps, model, num_classes,
@@ -502,18 +504,19 @@ def create_module_from_checkpoints(args):
         cifar_stem=FLAGS.image_size <= 32)
     
     #save the model in the same folder as the checkpoints
-    #FLAGS.model_dir = FLAGS.checkpoint_path
     print('Start: Creating Hub Module from FLAGS.checkpoint_path')
-    # global_step = int(FLAGS.checkpoint_path[-1])
-    # directories = os.listdir( FLAGS.checkpoint_path )
-    # for file in directories:
-    #     if 'index' in file:
-    #         global_step = int(re.search('[0-9]+$',file.rstrip('.index')).group(0))  
-    global_step = 1  
-    build_hub_module(model, FLAGS.num_classes,
-                     global_step = global_step,
-                     checkpoint_path= FLAGS.checkpoint_path)
+    #global_step = int(FLAGS.checkpoint_path[-1])
+    hub_name = os.path.basename(FLAGS.checkpoint_path) # Global step is actually the hub folder name used
+    hub_export_dir = build_hub_module(model, FLAGS.num_classes,
+                                        global_step = hub_name,
+                                        checkpoint_path= FLAGS.checkpoint_path)
     print('Hub Module Created')
+
+    # Copy hyper-param file 
+    if os.path.exists(os.path.join(FLAGS.checkpoint_path, "experiment_flags.txt")):
+        from shutil import copyfile
+        copyfile(os.path.join(FLAGS.checkpoint_path, "experiment_flags.txt"), 
+                os.path.join(hub_export_dir, hub_name, "hyper-parameters.txt"))
     sys.exit(0)
     
 

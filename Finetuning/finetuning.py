@@ -71,54 +71,6 @@ from shutil import rmtree
 from functools import partial
 import simclr_master.resnet as resnet
 
-# Argument Parsing
-parser = argparse.ArgumentParser(description='Finetuning on SimClrv2')
-parser.add_argument('--config', '-c', default='finetuning.yml', required=False,
-                   help='yml configuration file')
-parser.add_argument('--xray_path', default='', required=False,
-                    help='yml configuration file')
-args = parser.parse_args()
-
-# Yaml configuration files
-try:
-    with open(args.config) as f:
-        yml_config = yaml.load(f, Loader=yaml.FullLoader)
-except Exception:
-    raise RuntimeError(f"Configuration file {args.config} do not exist")
-
-# tf1.enable_eager_execution(config=None, device_policy=None, execution_mode=None)
-
-# Processing device selection
-device_name = [x.name for x in device_lib.list_local_devices() if x.device_type == 'GPU']
-
-
-# if device_name != []:
-#   if device_name[0] == "/device:GPU:0":
-#       device_name = "/gpu:0"
-#       #print('GPU')
-#   else:
-#       #print('CPU')
-#       device_name = "/cpu:0"
-
-if tf.config.list_physical_devices('gpu'):
-  strategy = tf.distribute.CentralStorageStrategy()
-else:  # use default strategy
-  strategy = tf.distribute.get_strategy()
-
-
-tf_flowers_labels = ['dandelion', 'daisy', 'tulips', 'sunflowers', 'roses']
-
-# @title Preprocessing functions from data_util.py in SimCLR repository (hidden).
-
-
-
-# Profiler
-# tf.profiler.experimental.server.start(6009)
-# tf.profiler.experimental.client.trace('grpc://127.0.0.1:6009',
-#                                       'gs://local_dir', 2000)
-
-
-
 def test_weighted_cel():
     with tf1.Session():
         b = 64
@@ -134,9 +86,7 @@ def show_one_image(im):
     plt.axis("off")
     plt.show()
 
-
-if __name__ == "__main__":
-
+def train(args, yml_config):
     with strategy.scope():
 
         # @title Load tensorflow datasets: we use tensorflow flower dataset as an examplegit
@@ -155,7 +105,7 @@ if __name__ == "__main__":
             num_classes = tfds_info.features['label'].num_classes
 
             x = tfds_dataset.map(_preprocess).batch(batch_size)
-            x = tf.data.make_one_shot_iterator(x).get_next()
+            x = tf1.data.make_one_shot_iterator(x).get_next()
 
         elif dataset_name == 'chest_xray':
             if args.xray_path == '':
@@ -192,35 +142,31 @@ if __name__ == "__main__":
         momentum = yml_config['finetuning']['momentum']
         weight_decay = yml_config['finetuning']['weight_decay']
         epoch_save_step = yml_config['finetuning']['epoch_save_step']
-        load_Saver = yml_config['finetuning'].get('load_Saver')
+        load_saver = yml_config['finetuning'].get('load_ckpt')
 
         # Load the base network and set it to non-trainable (for speedup fine-tuning)
         hub_path = str(Path(yml_config['finetuning']['pretrained_hub_path']).resolve())
         module = hub.Module(hub_path, trainable=yml_config['finetuning']['train_resnet'])
-        key = module(inputs=x['image'], signature="default", as_dict=True)
+        key = module(inputs=x['image'], signature="projection-head-1", as_dict=True)
 
         # Attach a trainable linear layer to adapt for the new task.
         if dataset_name == 'tf_flowers':
             with tf1.variable_scope('head_supervised_new', reuse=tf1.AUTO_REUSE):
                 logits_t = tf1.layers.dense(inputs=key['final_avg_pool'], units=num_classes, name='proj_head')
-            loss_t = tf.reduce_mean(input_tensor=tf.nn.softmax_cross_entropy_with_logits(
-                labels=tf.one_hot(x['label'], num_classes), logits=logits_t))
+            loss_t = tf1.reduce_mean(input_tensor=tf1.nn.softmax_cross_entropy_with_logits(
+                labels=tf1.one_hot(x['label'], num_classes), logits=logits_t))
         elif dataset_name == 'chest_xray':
             with tf1.variable_scope('head_supervised_new', reuse=tf1.AUTO_REUSE):
                 #logits_t = tf1.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
-                logits_t = tf1.layers.dense(inputs=key['proj_head_output'], units=num_classes)
+                logits_t = tf1.layers.dense(inputs=key['default'], units=num_classes)
                 cross_entropy = weighted_cel(labels=x['label'], logits=logits_t)
                 #cross_entropy = sigmoid_cross_entropy_with_logits(labels=x['label'], logits=logits_t)
-                loss_t = tf.reduce_mean(tf.reduce_sum(cross_entropy, axis=1))
+                loss_t = tf1.reduce_mean(tf1.reduce_sum(cross_entropy, axis=1))
 
 
         # Setup optimizer and training op.
         if yml_config['finetuning']['optimizer'] == 'adam':
-            optimizer = tf1.train.AdamOptimizer(
-                learning_rate,
-                beta1=0.9,
-                beta2=0.999,
-                epsilon=1e-08)
+            optimizer = tf1.train.AdamOptimizer(learning_rate)
         elif yml_config['finetuning']['optimizer'] == 'lars':
             optimizer = LARSOptimizer(
                 learning_rate,
@@ -241,13 +187,13 @@ if __name__ == "__main__":
 
         # Add ops to save and restore all the variables.
         sess = tf1.Session()
-        Saver = tf1.train.Saver()
+        Saver = tf1.train.Saver() # Default saves all variables
         current_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
         directory = Path(yml_config['checkpoint_dir'])/current_time
 
         is_time_to_save_session = partial(model_ckpt.save_session, epoch_save_step, Saver, output=directory)
-        if load_Saver is not None:
-            Saver.restore(sess, load_Saver)
+        if load_saver is not None:
+            Saver.restore(sess, load_saver)
         else:
             sess.run(tf1.global_variables_initializer())
 
@@ -374,6 +320,7 @@ if __name__ == "__main__":
 
                 print(f"[Epoch {it + 1}/{epochs} Loss: {train_tot_loss} Train Acc: {np.float32(epoch_acc_all)}, Train Acc Avg(class) {np.float32(epoch_acc_class_avg)}"
                       f" Train AUC: {epoch_auc_mean} AOC/Class {epoch_auc},")
+                
                 # Is it time to save the session?
                 is_time_to_save_session(it, sess)
 
@@ -389,8 +336,6 @@ if __name__ == "__main__":
                                                                   tf_tot_acc_class_avg_ph: epoch_acc_class_avg,
                                                                   tf_train_tot_loss_ph: train_tot_loss,
                                                                   tf_tot_auc_ph: epoch_auc_mean})
-
-
 
 
                 # Write the obtained summaries to the file, so it can be displayed in the TensorBoard
@@ -415,18 +360,96 @@ if __name__ == "__main__":
             rmtree(str(Path.cwd() / yml_config['finetuning']['finetuned_cp']))
             ckpt_pt = Saver.save(sess=sess,save_path=str(Path.cwd() / yml_config['finetuning']['finetuned_cp'] / 'pt'), global_step=step)
             print(f"Final Chekpoint Saved in {yml_config['finetuning']['finetuned_cp']}")
-            # module.export(str(Path(yml_config['finetuning']['finetuned_cp']) / 'hub'), sess)
 
-            # model = resnet.resnet_v1(
-            #     resnet_depth= 50,
-            #     width_multiplier= 1,
-            #     cifar_stem=32)
-            #
-            # # save the model in the same folder as the checkpoints
-            # # FLAGS.model_dir = FLAGS.checkpoint_path
-            # print('Start: Creating Hub Module from FLAGS.checkpoint_path')
-            # global_step = int(re.search('[0-9]+$',ckpt_pt).group(0))
-            # build_hub_module(model, num_classes,
-            #                  global_step=global_step,
-            #                  checkpoint_path=str(Path(yml_config['finetuning']['finetuned_cp'])))
-            # print('Hub Module Created')
+
+def build_hub_module(yml_config, num_classes, hub_id_name, checkpoint_path, save_path):
+    """Create TF-Hub module."""
+
+    tags_and_args = [
+        # The default graph is built with batch_norm, dropout etc. in inference
+        # mode. This graph version is good for inference, not training.
+        ([], {'is_training': False}),
+        # A separate "train" graph builds batch_norm, dropout etc. in training
+        # mode.
+        (['train'], {'is_training': True}),
+    ]
+
+    def module_fn(is_training):
+        endpoints = {}
+        inputs = tf1.placeholder(
+            tf1.float32, [None, None, None, 3])
+
+        # Load the base network and set it to non-trainable (for speedup fine-tuning)
+        hub_path = str(Path(yml_config['finetuning']['pretrained_hub_path']).resolve())
+        module = hub.Module(hub_path, trainable=is_training)
+        key = module(inputs=inputs, signature="projection-head-1", as_dict=True)
+
+        # Attach a trainable linear layer to adapt for the new task.
+        with tf1.variable_scope('head_supervised_new', reuse=tf1.AUTO_REUSE):
+            logits_t = tf1.layers.dense(inputs=key['default'], units=num_classes)
+            endpoints['head_classification'] = logits_t
+        
+        hub.add_signature(inputs=dict(images=inputs),
+                          outputs=dict(endpoints, default=logits_t))
+
+    spec = hub.create_module_spec(module_fn, tags_and_args)
+    hub_export_dir = os.path.join(save_path, 'hub')
+    checkpoint_export_dir = os.path.join(hub_export_dir, str(hub_id_name))
+    spec.export(
+        checkpoint_export_dir,
+        checkpoint_path=checkpoint_path,
+        name_transform_fn=None)
+
+    return hub_export_dir
+
+def create_module_from_checkpoints(yml_config):
+    hub_id_name = 'chest_xray'
+    num_classes = 14
+    checkpoint_path = yml_config['finetuning'].get('load_ckpt')
+    save_path = os.path.abspath("./saved_modules")
+    p = build_hub_module(yml_config, num_classes, dataset_name, checkpoint_path, save_path)
+
+    print("Module hub saved at {0} with id name {1}".format(p, hub_id_name))
+
+def main(args, yml_config, save_hub=False):
+    if not save_hub:
+        train(args, yml_config)
+    else:
+        create_module_from_checkpoints(yml_config)
+
+
+if __name__ == "__main__":
+    
+    # Argument Parsing
+    parser = argparse.ArgumentParser(description='Finetuning on SimClrv2')
+    parser.add_argument('--config', '-c', default='finetuning.yml', required=False,
+                    help='yml configuration file')
+    parser.add_argument('--xray_path', default='', required=False,
+                        help='yml configuration file')
+    parser.add_argument('--save_hub', action='store_true', default=False,
+                        help='yml configuration file')
+    args = parser.parse_args()
+
+    # Yaml configuration files
+    try:
+        with open(args.config) as f:
+            yml_config = yaml.load(f, Loader=yaml.FullLoader)
+    except Exception:
+        raise RuntimeError(f"Configuration file {args.config} do not exist")
+
+    # tf1.enable_eager_execution(config=None, device_policy=None, execution_mode=None)
+
+    if tf.config.list_physical_devices('gpu'):
+        strategy = tf.distribute.CentralStorageStrategy()
+    else:  # use default strategy
+        strategy = tf.distribute.get_strategy()
+
+
+    # Profiler
+    # tf.profiler.experimental.server.start(6009)
+    # tf.profiler.experimental.client.trace('grpc://127.0.0.1:6009',
+    #                                       'gs://local_dir', 2000)
+
+    main(args, yml_config, args.save_hub)
+
+    

@@ -26,6 +26,13 @@ from tensorflow.compiler.tf2xla.python import xla  # pylint: disable=g-direct-te
 LARGE_NUM = 1e9
 
 
+def add_kd_loss(student_logits, teacher_logits, temperature):
+  """Compute distillation loss."""
+  teacher_probs = tf.nn.softmax(teacher_logits / temperature)
+  kd_loss = tf.losses.softmax_cross_entropy(teacher_probs, student_logits / temperature, temperature**2)
+  return kd_loss
+
+
 def add_supervised_loss(labels, logits, weights, **kwargs):
   """Compute loss for model and add it to loss collection."""
   return tf.losses.softmax_cross_entropy(labels, logits, weights, **kwargs)
