@@ -31,7 +31,7 @@ finetuning:
     verbose_train_loop      : False
     # Input: Pre-Training
     pretrained_hub_path     :  '/home/yancote1/r50_1x_sk0/hub/'
-    pretrained_model        : 'ImageNet'
+    pretrained_model        : 'ImageNetSSl' # ChestXRay or 'ImageNetSSl'
     # Output: Finetuned Model
     finetuned_cp            :  ''
     # To load a specefic chekpoint
