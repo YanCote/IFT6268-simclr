@@ -432,7 +432,7 @@ if __name__ == "__main__":
     
     # Argument Parsing
     parser = argparse.ArgumentParser(description='Finetuning on SimClrv2')
-    parser.add_argument('--config', '-c', default='finetuning.yml', required=False,
+    parser.add_argument('--config', '-c', default='config.yml', required=False,
                     help='yml configuration file')
     parser.add_argument('--xray_path', default='', required=False,
                         help='yml configuration file')
