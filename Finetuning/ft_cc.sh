@@ -6,7 +6,7 @@
 #SBATCH --mem=32G
 #SBATCH --output=out_%j.out
 
-
+rsync -avx ~/IFT6268-simclr/ ~/scratch/IFT6268/
 echo 'Copying and unpacking dataset on local compute node...'
 tar -xf ~/scratch/data/images-224.tar -C $SLURM_TMPDIR
 echo 'Copying Data_Entry_2017.csv ...'

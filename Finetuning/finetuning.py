@@ -54,7 +54,7 @@ from tensorflow.python.client import device_lib
 from sklearn.metrics import roc_auc_score
 import matplotlib.pyplot as plt
 from datetime import datetime
-import tensorflow_datasets as tfds
+#import tensorflow_datasets as tfds
 import tensorflow_hub as hub
 import re
 import numpy as np
@@ -119,6 +119,7 @@ def train(args, yml_config):
         print(f"Training: {num_images} images...")
 
 
+
         def _preprocess(x):
             x['image'] = preprocess_image(
                 x['image'], 224, 224, is_training=False, color_distort=False)
@@ -128,8 +129,7 @@ def train(args, yml_config):
             .take(num_images) \
             .map(_preprocess, deterministic=False) \
             .shuffle(buffer_size)\
-            .batch(batch_size)\
-            # .prefetch(tf.data.experimental.AUTOTUNE)
+            .batch(yml_config['finetuning']['batch'])
 
 
         x_iter = tf1.data.make_one_shot_iterator(x_ds)
