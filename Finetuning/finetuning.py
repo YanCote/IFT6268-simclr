@@ -115,7 +115,7 @@ def train(args, yml_config):
             train_dataset, tfds_info = chest_xray.XRayDataSet(data_path,train_ratio=yml_config['finetuning']['train_data_ratio'], config=None, train=True)
             num_images = tfds_info['num_examples']
             num_classes = tfds_info['num_classes']
-
+            
         print(f"Training: {num_images} images...")
 
 
@@ -123,7 +123,7 @@ def train(args, yml_config):
             x['image'] = preprocess_image(
                 x['image'], 224, 224, is_training=False, color_distort=False)
             return x
-
+            
         x_ds = train_dataset \
             .take(num_images) \
             .map(_preprocess, deterministic=False) \
@@ -147,12 +147,17 @@ def train(args, yml_config):
         # Load the base network and set it to non-trainable (for speedup fine-tuning)
         hub_path = str(Path(yml_config['finetuning']['pretrained_hub_path']).resolve())
         module = hub.Module(hub_path, trainable=yml_config['finetuning']['train_resnet'])
-        key = module(inputs=x['image'], signature="projection-head-1", as_dict=True)
+        
+        if  yml_config['finetuning']['pretrained_model'] == 'ChestXRay':
+            key = module(inputs=x['image'], signature="projection-head-1", as_dict=True)
+        else:
+            key = module(inputs=x['image'], as_dict=True)
+
 
         # Attach a trainable linear layer to adapt for the new task.
         if dataset_name == 'tf_flowers':
             with tf1.variable_scope('head_supervised_new', reuse=tf1.AUTO_REUSE):
-                logits_t = tf1.layers.dense(inputs=key['final_avg_pool'], units=num_classes, name='proj_head')
+                logits_t = tf1.layers.dense(inputs=key['default'], units=num_classes, name='proj_head')
             loss_t = tf1.reduce_mean(input_tensor=tf1.nn.softmax_cross_entropy_with_logits(
                 labels=tf1.one_hot(x['label'], num_classes), logits=logits_t))
         elif dataset_name == 'chest_xray':
@@ -203,7 +208,6 @@ def train(args, yml_config):
 
         # ===============Tensor board section ===============
         # with tf.name_scope('performance'):
-        current_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
         # tf_labels = tf1.placeholder(tf.int32, shape=[batch_size,num_classes], name='accuracy')
         tf_tot_acc_all_ph = tf1.placeholder(tf.float32, shape=None, name='accuracy_all_labels_ph')
         tf_tot_acc_all_summary = tf1.summary.scalar('accuracy_all_labels', tf_tot_acc_all_ph)
@@ -233,6 +237,7 @@ def train(args, yml_config):
                 mlflow.set_experiment('fine_tuning')
                 mlflow.start_run()
                 mlflow.log_param('TB_Timestamp', current_time)
+                mlflow.log_param('Train or Test', 'Train')
                 mlflow.log_params(yml_config['finetuning'])
             writer = tf1.summary.FileWriter('./log', sess.graph)
             for index,summary_op in enumerate(hyper_param):
@@ -357,9 +362,9 @@ def train(args, yml_config):
                 if epoch_auc is not None:
                     mlflow.log_metrics(auc_scores)
 
-            rmtree(str(Path.cwd() / yml_config['finetuning']['finetuned_cp']))
-            ckpt_pt = Saver.save(sess=sess,save_path=str(Path.cwd() / yml_config['finetuning']['finetuned_cp'] / 'pt'), global_step=step)
-            print(f"Final Chekpoint Saved in {yml_config['finetuning']['finetuned_cp']}")
+            #rmtree(str(Path.cwd() / yml_config['finetuning']['finetuned_cp']))
+            #ckpt_pt = Saver.save(sess=sess,save_path=str(Path.cwd() / yml_config['finetuning']['finetuned_cp'] / 'pt'), global_step=step)
+            #print(f"Final Chekpoint Saved in {yml_config['finetuning']['finetuned_cp']}")
 
 
 def build_hub_module(yml_config, num_classes, hub_id_name, checkpoint_path, save_path):
@@ -382,7 +387,12 @@ def build_hub_module(yml_config, num_classes, hub_id_name, checkpoint_path, save
         # Load the base network and set it to non-trainable (for speedup fine-tuning)
         hub_path = str(Path(yml_config['finetuning']['pretrained_hub_path']).resolve())
         module = hub.Module(hub_path, trainable=is_training)
-        key = module(inputs=inputs, signature="projection-head-1", as_dict=True)
+
+        if  yml_config['finetuning']['pretrained_model'] == 'ChestXRay':
+            key = module(inputs=x['image'], signature="projection-head-1", as_dict=True)
+        else:
+            key = module(inputs=x['image'], as_dict=True)
+
 
         # Attach a trainable linear layer to adapt for the new task.
         with tf1.variable_scope('head_supervised_new', reuse=tf1.AUTO_REUSE):
