@@ -6,7 +6,7 @@
 #SBATCH --mem=32G
 #SBATCH --output=out_%j.out
 
-
+rsync -avx ~/IFT6268-simclr/ ~/scratch/IFT6268/
 echo 'Copying and unpacking dataset on local compute node...'
 tar -xf ~/scratch/data/images-224.tar -C $SLURM_TMPDIR
 echo 'Copying Data_Entry_2017.csv ...'
@@ -63,5 +63,5 @@ pip3 install --no-index ~/python_packages/tensorflow-datasets/zipp-3.4.0-py3-non
 pip3 install --no-index ~/python_packages/tensorflow-datasets/tensorflow_datasets-4.0.1-py3-none-any.whl
 
 echo 'Calling python script'
-stdbuf -oL python -u ./Finetuning/finetuning.py --config ./Finetuning/finetuning.yml --xray_path $SLURM_TMPDIR
+stdbuf -oL python -u ./Finetuning/finetuning.py --config ./Finetuning/config.yml --xray_path $SLURM_TMPDIR
 # deactivate
