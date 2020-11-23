@@ -61,6 +61,7 @@ import numpy as np
 import tensorflow as tf
 import tensorflow.compat.v1 as tf1
 import mlflow
+import pickle
 from pathlib import Path
 import time
 import scipy
@@ -70,6 +71,7 @@ tf1.disable_eager_execution()
 from shutil import rmtree
 from functools import partial
 import simclr_master.resnet as resnet
+from utils.create_folder import create_folder
 
 def test_weighted_cel():
     with tf1.Session():
@@ -164,8 +166,8 @@ def train(args, yml_config):
             with tf1.variable_scope('head_supervised_new', reuse=tf1.AUTO_REUSE):
                 #logits_t = tf1.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
                 logits_t = tf1.layers.dense(inputs=key['default'], units=num_classes)
-                cross_entropy = weighted_cel(labels=x['label'], logits=logits_t)
-                #cross_entropy = sigmoid_cross_entropy_with_logits(labels=x['label'], logits=logits_t)
+                #cross_entropy = weighted_cel(labels=x['label'], logits=logits_t)
+                cross_entropy = tf.nn.weighted_cross_entropy_with_logits(labels=x['label'], logits=logits_t, pos_weight=yml_config['finetuning']['pos_weight_loss'])
                 loss_t = tf1.reduce_mean(tf1.reduce_sum(cross_entropy, axis=1))
 
 
@@ -233,9 +235,14 @@ def train(args, yml_config):
         np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
         with sess.as_default() as scope:
             if yml_config['mlflow']:
+                fname = str(directory / f'params.pickle')
+                create_folder(directory)
+                with open(fname,'wb') as f:
+                    pickle.dump(yml_config['finetuning'], f)
                 mlflow.set_tracking_uri(yml_config['mlflow_path'])
                 mlflow.set_experiment('fine_tuning')
                 mlflow.start_run()
+                 mlflow.log_artifact(fname)
                 mlflow.log_param('TB_Timestamp', current_time)
                 mlflow.log_param('Train or Test', 'Train')
                 mlflow.log_params(yml_config['finetuning'])
@@ -303,8 +310,8 @@ def train(args, yml_config):
                     elapsed_time_iter = current_time_iter - start_time_iter
 
                     if yml_config['finetuning']['verbose_train_loop']:
-                        print(f"[Epoch {it + 1}/{epochs} Iter: {step}/{n_iter}] Total Loss: {train_tot_loss} Loss: {np.float32(loss)} Batch Acc: {np.float32(acc_all)} "
-                              f"Acc Avg(class): {np.float32(acc_class_avg)}")
+                        print(f"[Epoch {it + 1}/{epochs} Iter: {step}/{n_iter}] Model: {yml_config['finetuning']['pretrained_model']}, Total Loss: {train_tot_loss} Loss: {np.float32(loss)} Batch Acc: {np.float32(acc_all)} "
+                              f"Acc Avg(class): {np.float32(acc_class_avg)}, AUC Cumulative: {auc_cum}")
                         print(f"Finished iteration:{step} in: " + str(int(elapsed_time_iter)) + " sec")
                     # =============== Main Loop (iteration) - END ===============
 
@@ -323,7 +330,7 @@ def train(args, yml_config):
                     epoch_auc= None
                     epoch_auc_mean= None
 
-                print(f"[Epoch {it + 1}/{epochs} Loss: {train_tot_loss} Train Acc: {np.float32(epoch_acc_all)}, Train Acc Avg(class) {np.float32(epoch_acc_class_avg)}"
+                print(f"[Epoch {it + 1}/{epochs} Model: {yml_config['finetuning']['pretrained_model']}, Loss: {train_tot_loss} Train Acc: {np.float32(epoch_acc_all)}, Train Acc Avg(class) {np.float32(epoch_acc_class_avg)}"
                       f" Train AUC: {epoch_auc_mean} AOC/Class {epoch_auc},")
                 
                 # Is it time to save the session?
@@ -389,9 +396,9 @@ def build_hub_module(yml_config, num_classes, hub_id_name, checkpoint_path, save
         module = hub.Module(hub_path, trainable=is_training)
 
         if  yml_config['finetuning']['pretrained_model'] == 'ChestXRay':
-            key = module(inputs=x['image'], signature="projection-head-1", as_dict=True)
+            key = module(inputs=inputs, signature="projection-head-1", as_dict=True)
         else:
-            key = module(inputs=x['image'], as_dict=True)
+            key = module(inputs=inputs, as_dict=True)
 
 
         # Attach a trainable linear layer to adapt for the new task.
@@ -405,6 +412,7 @@ def build_hub_module(yml_config, num_classes, hub_id_name, checkpoint_path, save
     spec = hub.create_module_spec(module_fn, tags_and_args)
     hub_export_dir = os.path.join(save_path, 'hub')
     checkpoint_export_dir = os.path.join(hub_export_dir, str(hub_id_name))
+    create_folder(checkpoint_export_dir)
     spec.export(
         checkpoint_export_dir,
         checkpoint_path=checkpoint_path,
