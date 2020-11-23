@@ -1,4 +1,3 @@
-from __future__ import absolute_import, division, print_function, unicode_literals
 
 import os, sys
 if os.path.abspath(".") not in sys.path:
@@ -20,7 +19,7 @@ tf1.disable_eager_execution()
 
 
 def evaluation(yml_config, args):
-    
+   
     if yml_config['mlflow']:
         #fname = yml_config['inference']['hyper_params_path']
         #with open(fname,'rb') as f:
@@ -35,7 +34,6 @@ def evaluation(yml_config, args):
     sess = tf1.Session()
     
     #TO DO  a verifier quon prend le test data setls
-    
     if args.xray_path == '':
         data_path = yml_config['dataset']['chest_xray']
     else:
@@ -44,6 +42,7 @@ def evaluation(yml_config, args):
     num_images = tfds_info['num_examples']
     num_classes = tfds_info['num_classes']
     batch_size = yml_config['inference']['batch']
+
     n_iter = int(num_images / batch_size)
 
     def _preprocess(x):
@@ -105,6 +104,7 @@ def evaluation(yml_config, args):
                 mlflow.log_metrics(auc_scores)
                 mlflow.log_metric('Avg AUC', epoch_auc_mean)
 
+
         print(f"Validation Done! Model: {yml_config['finetuning']['pretrained_model']}, Total Loss: {val_tot_loss}, Mean Loss: {val_tot_loss_mean},"
                 f" Train AUC: {epoch_auc_mean} AOC/Class {epoch_auc},")
     
@@ -123,6 +123,7 @@ if __name__ == "__main__":
     # Yaml configuration files
     try:
         with open(args.config) as f:
+
             yml_config = yaml.load(f, Loader=yaml.FullLoader)
     except Exception:
         raise RuntimeError(f"Configuration file {args.config} do not exist")
