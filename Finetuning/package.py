@@ -737,8 +737,10 @@ def weighted_cel(
 
     cnt_one = tf.cast(tf.reduce_sum(labels),tf.float32)
     cnt_zero = tf.cast(tf.size(logits),tf.float32) - cnt_one
-    beta_p = (cnt_one + cnt_zero) / cnt_one
-    beta_n = (cnt_one + cnt_zero) / cnt_zero
+    beta_p = tf.cast((cnt_one + cnt_zero) / cnt_one,tf.float32)
+    beta_n = tf.cast((cnt_one + cnt_zero) / cnt_zero,tf.float32)
+    beta_n = math_ops.minimum(3.0,beta_n)
+    beta_p = math_ops.minimum(3.0, beta_p)
     zeros = array_ops.zeros_like(logits, dtype=logits.dtype)
     cond = (logits >= zeros)
     relu_logits = array_ops.where(cond, logits, zeros)
