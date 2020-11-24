@@ -208,7 +208,7 @@ if __name__ == "__main__":
         elif dataset_name == 'chest_xray':
             with tf1.variable_scope('head_supervised_new', reuse=tf1.AUTO_REUSE):
                 #logits_t = tf1.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
-                logits_t = tf1.layers.dense(inputs=key['proj_head_output'], units=num_classes)
+                logits_t = tf1.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
                 cross_entropy = weighted_cel(labels=x['label'], logits=logits_t)
                 #cross_entropy = sigmoid_cross_entropy_with_logits(labels=x['label'], logits=logits_t)
                 loss_t = tf.reduce_mean(tf.reduce_sum(cross_entropy, axis=1))
@@ -253,7 +253,7 @@ if __name__ == "__main__":
 
         # @title We fine-tune the new *linear layer* for just a few iterations.
         epochs = yml_config['finetuning']['epochs']
-
+        verbose_resources = False
 
         # ===============Tensor board section ===============
         # with tf.name_scope('performance'):
@@ -354,7 +354,8 @@ if __name__ == "__main__":
                     if yml_config['finetuning']['verbose_train_loop']:
                         print(f"[Epoch {it + 1}/{epochs} Iter: {step}/{n_iter}] Total Loss: {train_tot_loss} Loss: {np.float32(loss)} Batch Acc: {np.float32(acc_all)} "
                               f"Acc Avg(class): {np.float32(acc_class_avg)}")
-                        print(f"Finished iteration:{step} in: " + str(int(elapsed_time_iter)) + " sec")
+                        if verbose_resources:
+                            print(f"Finished iteration:{step} in: " + str(int(elapsed_time_iter)) + " sec")
                     # =============== Main Loop (iteration) - END ===============
 
                 epoch_acc_all = (tot_acc_all/n_iter)
@@ -380,7 +381,8 @@ if __name__ == "__main__":
                 current_time_epoch = time.time()
                 elapsed_time_iter = current_time_epoch - start_time_epoch
                 print(f"Finished EPOCH:{it} in: " + str(int(elapsed_time_iter)) + " sec")
-                # print(psutil.virtual_memory())
+                if verbose_resources:
+                    print(psutil.virtual_memory())
 
                 # ===================== Write Tensorboard summary ===============================
                 # Execute the summaries defined above

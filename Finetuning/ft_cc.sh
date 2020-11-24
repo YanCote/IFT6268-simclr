@@ -63,5 +63,4 @@ pip3 install --no-index ~/python_packages/tensorflow-datasets/zipp-3.4.0-py3-non
 pip3 install --no-index ~/python_packages/tensorflow-datasets/tensorflow_datasets-4.0.1-py3-none-any.whl
 
 echo 'Calling python script'
-stdbuf -oL python -u ./Finetuning/finetuning.py --config ./Finetuning/finetuning.yml --xray_path $SLURM_TMPDIR
-# deactivate
+stdbuf -oL python -u ./Finetuning/finetuning.py --config ./Finetuning/config.yml --xray_path $SLURM_TMPDIR
