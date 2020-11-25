@@ -7,6 +7,7 @@
 #SBATCH --account=def-bengioy
 #SBATCH --mem=0
 
+
 echo 'Copying and unpacking dataset on local compute node...'
 tar -xf ~/scratch/data/images-224.tar -C $SLURM_TMPDIR
 cp ~/scratch/data/Data_Entry_2017.csv $SLURM_TMPDIR
@@ -31,7 +32,7 @@ pip3 install --no-index pyasn1
 echo -e 'Installing tensorflow_gpu-hub ******************************\n'
 pip3 install --no-index tensorflow_gpu
 echo -e 'Installing TensorFlow-hub ******************************\n'
-pip3 install --no-index ~/python_packages/tensorflow_hub-0.9.0-py2.py3-none-any.whl
+pip3 install --no-index ~/python_packages/tensorflow-hub/tensorflow_hub-0.9.0-py2.py3-none-any.whl
 pip3 install --no-index tensorboard
 pip3 install --no-index termcolor
 pip3 install --no-index pandas
@@ -44,6 +45,10 @@ pip3 install --no-index scikit-learn
 
 echo 'Calling python script'
 dt=$(date '+%d-%m-%Y-%H-%M-%S');
-stdbuf -oL python -u simclr-master/run.py --local_tmp_folder $SLURM_TMPDIR --train_batch_size 80 --eval_batch_size 80 --use_multi_gpus --optimizer adam --model_dir /scratch/maruel/runs/pretrain-simclr-img-ok/$dt --temperature 0.5
-# deactivate
+nvidia-smi
+stdbuf -oL python -u ./simclr_master/run.py --local_tmp_folder $SLURM_TMPDIR --train_batch_size 64 \
+--eval_batch_size 64 --use_multi_gpus --optimizer adam --model_dir /home/yancote1/pretraining/$dt \
+--temperature 0.4 --train_epochs 10 --checkpoint_epochs 50 --weight_decay=0.0 --warmup_epochs=0 \
+--color_jitter_strength 0.5
+#--checkpoint /home/yancote1/pretraining/$dt/cp
 

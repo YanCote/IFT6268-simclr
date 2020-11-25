@@ -166,7 +166,7 @@ def train(args, yml_config):
             with tf1.variable_scope('head_supervised_new', reuse=tf1.AUTO_REUSE):
                 #logits_t = tf1.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
                 logits_t = tf1.layers.dense(inputs=key['default'], units=num_classes)
-                cross_entropy = weighted_cel(labels=x['label'], logits=logits_t)
+                cross_entropy = weighted_cel(labels=x['label'], logits=logits_t, bound = 3.0)
                 #cross_entropy = tf.nn.weighted_cross_entropy_with_logits(labels=x['label'], logits=logits_t, pos_weight=yml_config['finetuning']['pos_weight_loss'])
                 #cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(labels=x['label'], logits=logits_t)
                 loss_t = tf1.reduce_mean(tf1.reduce_sum(cross_entropy, axis=1))
@@ -317,6 +317,7 @@ def train(args, yml_config):
                     # =============== Main Loop (iteration) - END ===============
                     if np.isnan(np.sum(logits)):
                         print(f"Loss has exploded: Nan")
+                        it = epochs
                         break
                 epoch_acc_all = (tot_acc_all/n_iter)
                 epoch_acc_per_class = (tot_acc_per_class / n_iter)
@@ -341,7 +342,7 @@ def train(args, yml_config):
 
                 current_time_epoch = time.time()
                 elapsed_time_iter = current_time_epoch - start_time_epoch
-                print(f"Finished EPOCH:{it} in: " + str(int(elapsed_time_iter)) + " sec")
+                print(f"Finished EPOCH:{it + 1} in: " + str(int(elapsed_time_iter)) + " sec")
                 # print(psutil.virtual_memory())
 
                 # ===================== Write Tensorboard summary ===============================
