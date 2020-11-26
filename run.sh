@@ -14,6 +14,13 @@ cp ~/scratch/data/Data_Entry_2017.csv $SLURM_TMPDIR
 
 echo ''
 echo 'Starting task !'
+dt=$(date '+%d-%m-%Y-%H-%M-%S');
+echo 'Time Signature: $dt'
+pretrain_dir=/home/yancote1/models/pretrain/
+mkdir -p $pretrain_dir
+out_dir=$pretrain_dir/$dt
+exec > $out_dir/run1_$dt.txt
+
 echo 'Load Modules Python !'
 # module load arch/avx512 StdEnv/2018.3
 # nvidia-smi
@@ -44,10 +51,19 @@ pip3 install --no-index pyYAML
 pip3 install --no-index scikit-learn
 
 echo 'Calling python script'
-dt=$(date '+%d-%m-%Y-%H-%M-%S');
-echo dt
-stdbuf -oL python -u ./simclr_master/run.py --data_dir $SLURM_TMPDIR --train_batch_size 64 \
---eval_batch_size 64 --use_multi_gpus --optimizer adam --model_dir /home/yancote1/pretraining/$dt \
---temperature 0.4 --train_epochs 300 --checkpoint_epochs 50 --weight_decay=0.0 --warmup_epochs=0 \
---color_jitter_strength 0.5  >> /home/yancote1/pretraining/$dt/run_$dt.out
-mv out_%j.out /home/yancote1/pretraining/$dt
+
+
+echo $out_dir
+# --use_multi_gpus
+stdbuf -oL python ./simclr_master/run.py --data_dir $SLURM_TMPDIR \
+--train_batch_size 2 \
+--optimizer adam \
+--model_dir $out_dir \
+--checkpoint_path $out_dir \
+--temperature 0.4 --train_epochs 1 --checkpoint_epochs 50 --weight_decay=0.0 --warmup_epochs=0 \
+--color_jitter_strength 0.5 > out.txt 2>&1
+#$out_dir/run2_$dt.txt
+cd $pretrain_dir
+tar -zcvf $dt.tar.gz $out_dir
+#--remove-files
+echo 'PreTraining Completed !!! '
