@@ -34,7 +34,7 @@ Both graham and cedar are used in the project <https://docs.computecanada.ca/wik
 ## Pre-Training on XRAY
 
 Pre-Training is achieved using run.py. Locally, There's a template for parameter un launch_template.json which could be use with VSCode.
-ft_cc.sh is used to launch the script on compute node.
+*sbatch run.sh username* is used to launch the script on compute node.
 
 Every Run generate a Monolithic output such as archived and named using datetime:
 - One or several Checkpoint

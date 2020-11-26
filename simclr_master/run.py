@@ -406,7 +406,7 @@ def main(argv):
             # TODO config
             #data_path = FLAGS.local_tmp_folder
             data_path = FLAGS.data_dir
-            data_split = 0.01
+            data_split = 0.9
             print(f"***********************************************************************************")
             print("")
             print(f"DANGER WARNING ON SPLIT -> XRAY Data split:{data_split} SHOULD BE 0.9")

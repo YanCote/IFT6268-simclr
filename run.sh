@@ -2,7 +2,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --time=1-10:00
-#SBATCH --gres=gpu:v100:8
+#SBATCH --gres=gpu:v100:8             # CEDAR=--gres=gpul:v100:4 GRAHAM=--gres=gpu:v100:8
 #SBATCH --cpus-per-task=28
 #SBATCH --account=def-bengioy
 #SBATCH --output=pre_%j.out
@@ -15,11 +15,10 @@ cp ~/scratch/data/Data_Entry_2017.csv $SLURM_TMPDIR
 echo ''
 echo 'Starting task !'
 dt=$(date '+%d-%m-%Y-%H-%M-%S');
-echo 'Time Signature: $dt'
-pretrain_dir=/home/yancote1/models/pretrain/
+echo 'Time Signature: ${dt}'
+pretrain_dir="/home/${1:-yancote1}/models/pretrain/"
 mkdir -p $pretrain_dir
-out_dir=$pretrain_dir/$dt
-exec > $out_dir/run1_$dt.txt
+out_dir=$pretrain_dir$dt
 
 echo 'Load Modules Python !'
 # module load arch/avx512 StdEnv/2018.3
@@ -52,18 +51,20 @@ pip3 install --no-index scikit-learn
 
 echo 'Calling python script'
 
-
-echo $out_dir
 # --use_multi_gpus
-stdbuf -oL python ./simclr_master/run.py --data_dir $SLURM_TMPDIR \
+stdbuf -oL nohup python -u ./simclr_master/run.py --data_dir $SLURM_TMPDIR \
 --train_batch_size 2 \
 --optimizer adam \
 --model_dir $out_dir \
 --checkpoint_path $out_dir \
 --temperature 0.4 --train_epochs 1 --checkpoint_epochs 50 --weight_decay=0.0 --warmup_epochs=0 \
---color_jitter_strength 0.5 > out.txt 2>&1
-#$out_dir/run2_$dt.txt
+--color_jitter_strength 0.5 &> run_${dt}.txt
+
+echo 'Time Signature: $dt'
+echo "Saving Monolytic File Archive in : ${out_dir}/run_${dt}.txt"
+cp run_${dt}.txt "${out_dir}/run_${dt}.txt"
+
 cd $pretrain_dir
-tar -zcvf $dt.tar.gz $out_dir
-#--remove-files
+tar -zcvf $dt.tar.gz $out_dir --remove-files
+
 echo 'PreTraining Completed !!! '
