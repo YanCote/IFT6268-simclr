@@ -114,8 +114,8 @@ def train(args, yml_config):
                 data_path = yml_config['dataset']['chest_xray']
             else:
                 data_path = args.xray_path
-            train_dataset, tfds_info = chest_xray.XRayDataSet(data_path,train_ratio=yml_config['finetuning']['train_data_ratio'], config=None, train=True)
-            num_images = tfds_info['num_examples']
+            train_dataset, tfds_info = chest_xray.XRayDataSet(data_path, config=None, train=True)
+            num_images = np.floor(yml_config['finetuning']['train_data_ratio'] *tfds_info['num_examples'])
             num_classes = tfds_info['num_classes']
             
         print(f"Training: {num_images} images...")
@@ -166,8 +166,9 @@ def train(args, yml_config):
             with tf1.variable_scope('head_supervised_new', reuse=tf1.AUTO_REUSE):
                 #logits_t = tf1.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
                 logits_t = tf1.layers.dense(inputs=key['default'], units=num_classes)
-                #cross_entropy = weighted_cel(labels=x['label'], logits=logits_t)
-                cross_entropy = tf.nn.weighted_cross_entropy_with_logits(labels=x['label'], logits=logits_t, pos_weight=yml_config['finetuning']['pos_weight_loss'])
+                cross_entropy = weighted_cel(labels=x['label'], logits=logits_t, bound = 3.0)
+                #cross_entropy = tf.nn.weighted_cross_entropy_with_logits(labels=x['label'], logits=logits_t, pos_weight=yml_config['finetuning']['pos_weight_loss'])
+                #cross_entropy = tf.nn.sigmoid_cross_entropy_with_logits(labels=x['label'], logits=logits_t)
                 loss_t = tf1.reduce_mean(tf1.reduce_sum(cross_entropy, axis=1))
 
 
@@ -242,7 +243,7 @@ def train(args, yml_config):
                 mlflow.set_tracking_uri(yml_config['mlflow_path'])
                 mlflow.set_experiment('fine_tuning')
                 mlflow.start_run()
-                 mlflow.log_artifact(fname)
+                mlflow.log_artifact(fname)
                 mlflow.log_param('TB_Timestamp', current_time)
                 mlflow.log_param('Train or Test', 'Train')
                 mlflow.log_params(yml_config['finetuning'])
@@ -312,9 +313,12 @@ def train(args, yml_config):
                     if yml_config['finetuning']['verbose_train_loop']:
                         print(f"[Epoch {it + 1}/{epochs} Iter: {step}/{n_iter}] Model: {yml_config['finetuning']['pretrained_model']}, Total Loss: {train_tot_loss} Loss: {np.float32(loss)} Batch Acc: {np.float32(acc_all)} "
                               f"Acc Avg(class): {np.float32(acc_class_avg)}, AUC Cumulative: {auc_cum}")
-                        print(f"Finished iteration:{step} in: " + str(int(elapsed_time_iter)) + " sec")
+                        print(f"Finished iteration:{step} in: " + str(int(elapsed_time_iter)) + f" sec logits min,max: {np.min(logits)},{np.max(logits)}")
                     # =============== Main Loop (iteration) - END ===============
-
+                    if np.isnan(np.sum(logits)):
+                        print(f"Loss has exploded: Nan")
+                        it = epochs
+                        break
                 epoch_acc_all = (tot_acc_all/n_iter)
                 epoch_acc_per_class = (tot_acc_per_class / n_iter)
                 epoch_acc_class_avg = (tot_acc_class_avg / n_iter)
@@ -338,7 +342,7 @@ def train(args, yml_config):
 
                 current_time_epoch = time.time()
                 elapsed_time_iter = current_time_epoch - start_time_epoch
-                print(f"Finished EPOCH:{it} in: " + str(int(elapsed_time_iter)) + " sec")
+                print(f"Finished EPOCH:{it + 1} in: " + str(int(elapsed_time_iter)) + " sec")
                 # print(psutil.virtual_memory())
 
                 # ===================== Write Tensorboard summary ===============================

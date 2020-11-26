@@ -39,13 +39,17 @@ import tensorflow_hub as hub
 if os.path.abspath(".") not in sys.path:
     sys.path.append(os.path.abspath("."))
 import dataloaders.chest_xray as chest_xray
-
+import pickle
 
 FLAGS = flags.FLAGS
 
+# flags.DEFINE_string(
+#     'local_tmp_folder', "",
+#     'The local computer temp dir path (Not Used...).')
+
 flags.DEFINE_string(
-    'local_tmp_folder', "",
-    'The local computer temp dir path.')
+    'data_dir', None,
+    'Directory where dataset is stored.')
 
 flags.DEFINE_boolean(
     'use_multi_gpus', False,
@@ -60,7 +64,7 @@ flags.DEFINE_enum(
     'How to scale the learning rate as a function of batch size.')
 
 flags.DEFINE_float(
-    'warmup_epochs', 10,
+    'warmup_epochs', 0,
     'Number of epochs of warmup.')
 
 flags.DEFINE_float(
@@ -155,7 +159,7 @@ flags.DEFINE_string(
     'Model directory for training.')
 
 flags.DEFINE_string(
-    'data_dir', None,
+    '/home/yancote1/pretraining/$dt', None,
     'Directory where dataset is stored.')
 
 flags.DEFINE_bool(
@@ -400,12 +404,21 @@ def main(argv):
         if FLAGS.dataset == "chest_xray":
             # Not really a builder, but it's compatible
             # TODO config
-            data_path = FLAGS.local_tmp_folder
-            builder, info = chest_xray.XRayDataSet(data_path, config=None, train=True, return_tf_dataset=False, split=0.05)
+            #data_path = FLAGS.local_tmp_folder
+            data_path = FLAGS.data_dir
+            data_split = 0.9
+            print(f"***********************************************************************************")
+            print("")
+            print(f"DANGER WARNING ON SPLIT -> XRAY Data split:{data_split} SHOULD BE 0.9")
+            print("")
+            print(f"***********************************************************************************")
+
+            builder, info = chest_xray.XRayDataSet(data_path, config=None, train=True, return_tf_dataset=False, split=data_split)
             build_input_fn = partial(data_lib.build_chest_xray_fn, FLAGS.use_multi_gpus, data_path)
             num_train_examples = info.get('num_examples')
             num_classes = info.get('num_classes')
             num_eval_examples = info.get('num_eval_examples')
+            print(f"num_train_examples:{num_train_examples}, num_eval_examples:{num_eval_examples}")
         else:
             #builder = tfds.builder(FLAGS.dataset, data_dir=FLAGS.data_dir)
             builder.download_and_prepare()
@@ -464,7 +477,8 @@ def main(argv):
             
 
         # save flags for this experiment
-        
+
+        pickle.dump(FLAGS.flag_values_dict(), open(os.path.join(FLAGS.model_dir, 'experiment_flags.p'), "wb"))
         FLAGS.append_flags_into_file(os.path.join(FLAGS.model_dir, 'experiment_flags.txt'))
 
         # Train/Eval
@@ -493,7 +507,8 @@ def main(argv):
                     eval_steps=eval_steps,
                     model=model,
                     num_classes=num_classes)
-
+        #Save the Hub in all case
+        app.run(create_module_from_checkpoints)
 
 def create_module_from_checkpoints(args):
 

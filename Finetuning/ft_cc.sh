@@ -6,12 +6,12 @@
 #SBATCH --mem=32G
 #SBATCH --output=out_%j.out
 
-rsync -avx ~/IFT6268-simclr/ ~/scratch/IFT6268/
+
 echo 'Copying and unpacking dataset on local compute node...'
 tar -xf ~/scratch/data/images-224.tar -C $SLURM_TMPDIR
 echo 'Copying Data_Entry_2017.csv ...'
 cp -v ~/scratch/data/Data_Entry_2017.csv $SLURM_TMPDIR
-                                          
+
 
 echo 'List1'
 ls -l -d ~/scratch/*/
@@ -36,10 +36,10 @@ source $SLURM_TMPDIR/env/bin/activate
 echo 'Installing package'
 # pip3 install --no-index --upgrade pip
 pip3 install --no-index pyasn1
-echo -e 'Installing tensorflow_gpu-hub ******************************\n'
+echo -e 'Installing tensorflow_gpu  ******************************\n'
 pip3 install --no-index tensorflow_gpu
 echo -e 'Installing TensorFlow-hub ******************************\n'
-pip3 install --no-index ~/python_packages/tensorflow-hub/tensorflow_hub-0.9.0-py2.py3-none-any.whl
+pip3 install --no-index ~/python_packages/tensorflow-hub/tensorflow-hub/tensorflow_hub-0.9.0-py2.py3-none-any.whl
 pip3 install --no-index tensorboard
 pip3 install --no-index termcolor
 pip3 install --no-index pandas
