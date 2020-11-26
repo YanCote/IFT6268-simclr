@@ -96,7 +96,6 @@ class XRayDataSet(tf.data.Dataset):
         train: bool = True,
         seed: int = 1337,
         split: float = 0.90,
-        train_ratio: float = 1.0,
         return_tf_dataset: bool = True,
     ):
         """
@@ -108,7 +107,7 @@ class XRayDataSet(tf.data.Dataset):
             max_id = df["Patient ID"].max()
             possible_ids = range(1, max_id + 1)
             random.seed(seed)
-            split_ids = random.sample(possible_ids, int(max_id * split * train_ratio))
+            split_ids = random.sample(possible_ids, int(max_id * split ))
             train_df = df[df["Patient ID"].isin(split_ids)]
             
             dataframe = train_df.sample(frac=1).reset_index(drop=True) # shuffle data

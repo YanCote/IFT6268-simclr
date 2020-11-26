@@ -114,8 +114,8 @@ def train(args, yml_config):
                 data_path = yml_config['dataset']['chest_xray']
             else:
                 data_path = args.xray_path
-            train_dataset, tfds_info = chest_xray.XRayDataSet(data_path,train_ratio=yml_config['finetuning']['train_data_ratio'], config=None, train=True)
-            num_images = tfds_info['num_examples']
+            train_dataset, tfds_info = chest_xray.XRayDataSet(data_path, config=None, train=True)
+            num_images = np.floor(yml_config['finetuning']['train_data_ratio'] *tfds_info['num_examples'])
             num_classes = tfds_info['num_classes']
             
         print(f"Training: {num_images} images...")

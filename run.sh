@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --time=1-00:00
-#SBATCH --gres=gpu:p100l:4
-#SBATCH --cpus-per-task=24
+#SBATCH --time=1-10:00
+#SBATCH --gres=gpu:v100:8
+#SBATCH --cpus-per-task=28
 #SBATCH --account=def-bengioy
-#SBATCH --mem=0
-
+#SBATCH --output=pre_%j.out
+#SBATCH --mem=178G
 
 echo 'Copying and unpacking dataset on local compute node...'
 tar -xf ~/scratch/data/images-224.tar -C $SLURM_TMPDIR
@@ -45,10 +45,9 @@ pip3 install --no-index scikit-learn
 
 echo 'Calling python script'
 dt=$(date '+%d-%m-%Y-%H-%M-%S');
-nvidia-smi
-stdbuf -oL python -u ./simclr_master/run.py --local_tmp_folder $SLURM_TMPDIR --train_batch_size 64 \
+echo dt
+stdbuf -oL python -u ./simclr_master/run.py --data_dir $SLURM_TMPDIR --train_batch_size 64 \
 --eval_batch_size 64 --use_multi_gpus --optimizer adam --model_dir /home/yancote1/pretraining/$dt \
---temperature 0.4 --train_epochs 10 --checkpoint_epochs 50 --weight_decay=0.0 --warmup_epochs=0 \
---color_jitter_strength 0.5
-#--checkpoint /home/yancote1/pretraining/$dt/cp
-
+--temperature 0.4 --train_epochs 300 --checkpoint_epochs 50 --weight_decay=0.0 --warmup_epochs=0 \
+--color_jitter_strength 0.5  >> /home/yancote1/pretraining/$dt/run_$dt.out
+mv out_%j.out /home/yancote1/pretraining/$dt
