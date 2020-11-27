@@ -2,11 +2,16 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --time=1-10:00
-#SBATCH --gres=gpu:v100:8             # CEDAR=--gres=gpul:v100:4 GRAHAM=--gres=gpu:v100:8
 #SBATCH --cpus-per-task=28
 #SBATCH --account=def-bengioy
 #SBATCH --output=pre_%j.out
 #SBATCH --mem=178G
+#SBATCH --gres=gpu:v100:8
+
+# Compute Canada Configuration
+#CEDAR= --gres=gpul:v100:4 -> mem=178G or 250G || gres=gpul:p100l:4 ->  mem=120G
+#GRAHAM --gres=gpu:v100:8 -> mem=178G or 377G  || gres=gpul:p100:2 ->  mem=120G
+#GRAHAM --gres=gpu:v100:4 -> mem=186G
 
 echo 'Copying and unpacking dataset on local compute node...'
 tar -xf ~/scratch/data/images-224.tar -C $SLURM_TMPDIR
@@ -53,11 +58,11 @@ echo 'Calling python script'
 
 # --use_multi_gpus
 stdbuf -oL nohup python -u ./simclr_master/run.py --data_dir $SLURM_TMPDIR \
---train_batch_size 2 \
+--train_batch_size 64 \
 --optimizer adam \
 --model_dir $out_dir \
 --checkpoint_path $out_dir \
---temperature 0.4 --train_epochs 1 --checkpoint_epochs 50 --weight_decay=0.0 --warmup_epochs=0 \
+--temperature 0.5 --train_epochs 10 --checkpoint_epochs 50 --weight_decay=0.0 --warmup_epochs=0 \
 --color_jitter_strength 0.5 &> run_${dt}.txt
 
 echo 'Time Signature: $dt'

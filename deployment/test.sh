@@ -12,5 +12,5 @@ echo $out_dir
 echo {$out_dir}
 echo "${out_dir}/run2_${dt}.txt"
 echo 'PreTraining Completed !!! '
-python pytorch-test.py | tee run_${dt}.txt
+python pytorch-test.py > run_${dt}.txt
 cp run_${dt}.txt  "${pretrain_dir}/run2_${dt}.txt"
