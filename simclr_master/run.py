@@ -257,8 +257,12 @@ flags.DEFINE_float(
     'color_jitter_strength', 0.5,
     'The strength of color jittering.')
 
+flags.DEFINE_float(
+    'train_data_split', 0.9,
+    'TPortion of Data for training SHOULD be 0.9')
+
 flags.DEFINE_boolean(
-    'use_blur', True,
+    'use_blur', False,
     'Whether or not to use Gaussian blur for augmentation during pretraining.')
 
 flags.DEFINE_string(
@@ -406,7 +410,7 @@ def main(argv):
             # TODO config
             #data_path = FLAGS.local_tmp_folder
             data_path = FLAGS.data_dir
-            data_split = 0.9
+            data_split = FLAGS.train_data_split
             print(f"***********************************************************************************")
             print("")
             print(f"DANGER WARNING ON SPLIT -> XRAY Data split:{data_split} SHOULD BE 0.9")

@@ -1,17 +1,19 @@
 #!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --time=1-10:00
-#SBATCH --cpus-per-task=28
+#SBATCH --time=2-10:00
+#SBATCH --cpus-per-task=40
 #SBATCH --account=def-bengioy
 #SBATCH --output=pre_%j.out
-#SBATCH --mem=178G
-#SBATCH --gres=gpu:v100:8
+#SBATCH --mem=180G
+#SBATCH --gres=gpu:v100:4
+#SBATCH --mail-user=yan.cote.1@umontreal.ca
+#SBATCH --mail-type=END
 
 # Compute Canada Configuration
 #CEDAR= --gres=gpul:v100:4 -> mem=178G or 250G || gres=gpul:p100l:4 ->  mem=120G
 #GRAHAM --gres=gpu:v100:8 -> mem=178G or 377G  || gres=gpul:p100:2 ->  mem=120G
-#GRAHAM --gres=gpu:v100:4 -> mem=186G
+#BELUGA --gres=gpu:v100:4 -> mem=186G
 
 echo 'Copying and unpacking dataset on local compute node...'
 tar -xf ~/scratch/data/images-224.tar -C $SLURM_TMPDIR
@@ -55,21 +57,26 @@ pip3 install --no-index pyYAML
 pip3 install --no-index scikit-learn
 
 echo 'Calling python script'
-
-# --use_multi_gpus
+if
 stdbuf -oL nohup python -u ./simclr_master/run.py --data_dir $SLURM_TMPDIR \
---train_batch_size 64 \
+--train_batch_size 80 \
 --optimizer adam \
 --model_dir $out_dir \
+--use_multi_gpus \
 --checkpoint_path $out_dir \
---temperature 0.5 --train_epochs 10 --checkpoint_epochs 50 --weight_decay=0.0 --warmup_epochs=0 \
---color_jitter_strength 0.5 &> run_${dt}.txt
-
+--learning_rate 0.1 \
+--use_blur \
+--temperature 0.5 \
+--proj_out_dim 128 \
+--train_epochs 10 \
+--checkpoint_epochs 50 \
+--color_jitter_strength 0.5 > run_${dt}.txt  2>&1;
+then
 echo 'Time Signature: $dt'
 echo "Saving Monolytic File Archive in : ${out_dir}/run_${dt}.txt"
 cp run_${dt}.txt "${out_dir}/run_${dt}.txt"
 
 cd $pretrain_dir
-tar -zcvf $dt.tar.gz $out_dir --remove-files
-
+tar -zcvf ${dt}.tar.gz ${dt}
+fi
 echo 'PreTraining Completed !!! '
