@@ -1,4 +1,3 @@
-
 import os, sys
 if os.path.abspath(".") not in sys.path:
     sys.path.append(os.path.abspath("."))
@@ -14,6 +13,7 @@ import argparse
 import yaml
 import pickle
 import mlflow
+import scipy
 print(tf.__version__)
 tf1.disable_eager_execution()
 
@@ -39,7 +39,7 @@ def evaluation(yml_config, args):
     else:
         data_path = args.xray_path
     test_dataset, tfds_info = chest_xray.XRayDataSet(data_path,train_ratio=yml_config['finetuning']['train_data_ratio'], config=None, train=False)
-    num_images = tfds_info['num_examples']
+    num_images = tfds_info['num_eval_examples']
     num_classes = tfds_info['num_classes']
     batch_size = yml_config['inference']['batch']
 
@@ -57,6 +57,38 @@ def evaluation(yml_config, args):
     
     x_iter = tf1.data.make_one_shot_iterator(x_ds)
     x_init = x_iter.make_initializer(x_ds)
+    x = x_iter.get_next()
+
+    key = module(x['image'], as_dict=True)
+    cross_entropy = tf.nn.weighted_cross_entropy_with_logits(labels=x['label'], logits=key['default'],  pos_weight=yml_config['finetuning']['pos_weight_loss'])
+    loss = tf1.reduce_mean(tf1.reduce_sum(cross_entropy, axis=1))
+
+    # ------------------------------------
+    #from pathlib import Path
+    #hub_path = str(Path(yml_config['finetuning']['pretrained_hub_path']).resolve())
+    #module = hub.Module(hub_path, trainable=False)
+    #key = module(inputs=x['image'], as_dict=True)
+    #with tf1.variable_scope('head_supervised_new', reuse=tf1.AUTO_REUSE):
+    #    logits_t = tf1.layers.dense(inputs=key['default'], units=num_classes)
+    #    cross_entropy = tf.nn.weighted_cross_entropy_with_logits(labels=x['label'], logits=key['default'], pos_weight=10)
+    #    loss_t = tf1.reduce_mean(tf1.reduce_sum(cross_entropy, axis=1))
+#
+    #variables_to_train = tf1.trainable_variables()
+    #optimizer = LARSOptimizer
+    #            0.2,
+    #            momentum=0.1,
+    #            weight_decay=0.0,
+    #            exclude_from_weight_decay=['batch_normalization', 'bias', 'head_supervised'])
+    #train_op = optimizer.minimize(
+    #    logits_t, global_step=tf1.train.get_or_create_global_step(),
+    #    var_list=variables_to_train)
+#
+    #sess = tf1.Session()
+    #Saver = tf1.train.Saver() # Default saves all variables
+    #Saver.restore(sess, "H:/AI_Projects/outputs/runs/SimCLR/finetune/2020-11-22-22-18-51/session_24.ckpt")
+
+    
+    # ------------------------------------
 
     
     with sess.as_default():
@@ -66,14 +98,11 @@ def evaluation(yml_config, args):
         all_logits = []
         val_tot_loss = 0
         for step in range(n_iter): 
-            x = x_iter.get_next()
-            logits = module(x['image']).eval()
-            labels = x['label'].eval()
+            _loss, logits, labels = sess.run(fetches=(loss, key['default'], x['label']))
+            logits_sig = scipy.special.expit(logits)
+            all_logits.extend(logits_sig)
             all_labels.extend(labels)
-            all_logits.extend(logits)
-            cross_entropy = tf.nn.weighted_cross_entropy_with_logits(labels=labels, logits=logits, pos_weight=yml_config['finetuning']['pos_weight_loss'])
-            loss = tf1.reduce_mean(tf1.reduce_sum(cross_entropy, axis=1))
-            val_tot_loss += loss
+            val_tot_loss += _loss
 
             try:
                 auc_cum = roc_auc_score(np.array(all_labels),np.array(all_logits))
@@ -82,7 +111,7 @@ def evaluation(yml_config, args):
 
 
             if yml_config['finetuning']['verbose_train_loop']:
-                print(f" [Iter: {step}/{n_iter}] Total Loss: {val_tot_loss.eval()} Loss: {np.float32(loss.eval())}  AUC Cumulative: {auc_cum}")
+                print(f" [Iter: {step}/{n_iter}] Total Loss: {val_tot_loss} Loss: {np.float32(_loss)}  AUC Cumulative: {auc_cum}")
 
 
         val_tot_loss_mean = val_tot_loss / n_iter

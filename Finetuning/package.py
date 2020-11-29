@@ -606,78 +606,11 @@ class LARSOptimizer(tf1.train.Optimizer):
 
 
 
-
-def sigmoid_cross_entropy_with_logits(  # pylint: disable=invalid-name
-    _sentinel=None,
-    labels=None,
-    logits=None,
-    name=None):
-  """Computes sigmoid cross entropy given `logits`.
-  Measures the probability error in discrete classification tasks in which each
-  class is independent and not mutually exclusive.  For instance, one could
-  perform multilabel classification where a picture can contain both an elephant
-  and a dog at the same time.
-  For brevity, let `x = logits`, `z = labels`.  The logistic loss is
-        z * -log(sigmoid(x)) + (1 - z) * -log(1 - sigmoid(x))
-      = z * -log(1 / (1 + exp(-x))) + (1 - z) * -log(exp(-x) / (1 + exp(-x)))
-      = z * log(1 + exp(-x)) + (1 - z) * (-log(exp(-x)) + log(1 + exp(-x)))
-      = z * log(1 + exp(-x)) + (1 - z) * (x + log(1 + exp(-x))
-      = (1 - z) * x + log(1 + exp(-x))
-      = x - x * z + log(1 + exp(-x))
-  For x < 0, to avoid overflow in exp(-x), we reformulate the above
-        x - x * z + log(1 + exp(-x))
-      = log(exp(x)) - x * z + log(1 + exp(-x))
-      = - x * z + log(1 + exp(x))
-  Hence, to ensure stability and avoid overflow, the implementation uses this
-  equivalent formulation
-      max(x, 0) - x * z + log(1 + exp(-abs(x)))
-  `logits` and `labels` must have the same type and shape.
-  Args:
-    _sentinel: Used to prevent positional parameters. Internal, do not use.
-    labels: A `Tensor` of the same type and shape as `logits`.
-    logits: A `Tensor` of type `float32` or `float64`.
-    name: A name for the operation (optional).
-  Returns:
-    A `Tensor` of the same shape as `logits` with the componentwise
-    logistic losses.
-  Raises:
-    ValueError: If `logits` and `labels` do not have the same shape.
-  """
-  # pylint: disable=protected-access
-  nn_ops._ensure_xent_args("sigmoid_cross_entropy_with_logits", _sentinel,
-                           labels, logits)
-  # pylint: enable=protected-access
-
-  with ops.name_scope(name, "logistic_loss", [logits, labels]) as name:
-    logits = ops.convert_to_tensor(logits, name="logits")
-    labels = ops.convert_to_tensor(labels, name="labels")
-    try:
-      labels.get_shape().merge_with(logits.get_shape())
-    except ValueError:
-      raise ValueError("logits and labels must have the same shape (%s vs %s)" %
-                       (logits.get_shape(), labels.get_shape()))
-
-    # The logistic loss formula from above is
-    #   x - x * z + log(1 + exp(-x))
-    # For x < 0, a more numerically stable formula is
-    #   -x * z + log(1 + exp(x))
-    # Note that these two expressions can be combined into the following:
-    #   max(x, 0) - x * z + log(1 + exp(-abs(x)))
-    # To allow computing gradients at zero, we define custom versions of max and
-    # abs functions.
-    zeros = array_ops.zeros_like(logits, dtype=logits.dtype)
-    cond = (logits >= zeros)
-    relu_logits = array_ops.where(cond, logits, zeros)
-    neg_abs_logits = array_ops.where(cond, -logits, logits)
-    return math_ops.add(
-        relu_logits - logits * labels,
-        math_ops.log1p(math_ops.exp(neg_abs_logits)),
-        name=name)
-
 def weighted_cel(
     _sentinel=None,
     labels=None,
     logits=None,
+    bound=2.0,
     name=None):
   """
   Inspired strongly by tensorflow :sigmoid_cross_entropy_with_logits
@@ -739,6 +672,8 @@ def weighted_cel(
     cnt_zero = tf.cast(tf.size(logits),tf.float32) - cnt_one
     beta_p = (cnt_one + cnt_zero) / cnt_one
     beta_n = (cnt_one + cnt_zero) / cnt_zero
+    beta_n = math_ops.minimum(bound, beta_n)
+    beta_p = math_ops.minimum(bound, beta_p)
     zeros = array_ops.zeros_like(logits, dtype=logits.dtype)
     cond = (logits >= zeros)
     relu_logits = array_ops.where(cond, logits, zeros)
