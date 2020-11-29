@@ -1,7 +1,5 @@
-
 device_type             : ['/cpu:0', '/gpu:0']
 data_src                : 'chest_xray'
-checkpoint_dir          : 'checkpoints'
 tensorboard             : True
 mlflow_path             :  ../mlruns   #/Users/shanelgauthier/Documents/UDEM/Self-Supervised Learning/mlruns
 mlflow                  : True
@@ -30,21 +28,13 @@ finetuning:
     train_resnet            : True                     # trainable flag for the resnet model
     verbose_train_loop      : False
     pos_weight_loss         : 10
-    # Input: Pre-Training
-    #pretrained_hub_path     :  '/home/yancote1/r50_1x_sk0/hub/'
     pretrained_hub_path     :  '/home/yancote1/models/pretrain/xray/12-11-2020-20-17-01'
-    # pretrained_hub_path     :  '/home/yancote1/models/pretrain/xray/16-11-2020-08-36-27'
     pretrained_model        : 'ChestXRay' # ChestXRay or 'ImageNetSSl'
-    # Output: Finetuned Model
-    #finetuned_cp            : ''
-    #load_ckpt               : ''
 
 
 inference:
     batch                    : 5
-    checkpoint_path          : './r50_1x_sk0/'
-    hub_path                 : './r50_1x_sk0/hub/'
-
+    pretrained_hub_path'     : './r50_1x_sk0/'
 
 
 distillation:

@@ -237,13 +237,7 @@ def train(args, yml_config):
         # Limit the precision of floats...
         np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
         with sess.as_default() as scope:
-            if yml_config['mlflow']:
-                #save finutning params in pickle file
-                fname = os.path.join(directory, 'params.pickle')
-                create_folder(directory)
-                with open(fname,'wb') as f:
-                    pickle.dump(yml_config['finetuning'], f)
-                
+            if yml_config['mlflow']:                
                 # open pickle file that contains the hyper params of pretuned
                 fname  = os.path.join(yml_config['finetuning']['pretrained_build'], 'experiment_flags.p')
                 with open(fname,'rb') as f:
