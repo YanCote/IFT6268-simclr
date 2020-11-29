@@ -118,17 +118,17 @@ def build_chest_xray_fn(use_multi_gpus, data_path, _, is_training):
             """Produces multiple transformations of the same batch."""
             image = data_point['image']
             label = data_point['label']
-            if FLAGS.train_mode == 'pretrain' or FLAGS.train_mode == 'eval':
+            if FLAGS.train_mode == 'pretrain' or FLAGS.train_mode == 'eval_ssl':
                 xs = []
                 for _ in range(2):  # Two transformations
                     xs.append(preprocess_fn_pretrain(image))
                 image = tf.concat(xs, -1)
             else:
                 image = preprocess_fn_finetune(image)
-            return image, label, 1.0 #, data_point.get('idx')
+            return image, label, 1.0 , data_point.get('idx')
         
-        def map_fn2(image, label, mask):
-            return (image, {'labels':label, 'mask':mask})
+        def map_fn2(image, label, mask, idx):
+            return (image, {'labels':label, 'mask':mask, 'idx': idx})
 
         dataset, info = chest_xray.XRayDataSet(data_path, config=None, train=is_training)
         if FLAGS.cache_dataset:
