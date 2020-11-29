@@ -1,11 +1,12 @@
 #!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --time=1-00:00
-#SBATCH --gres=gpu:p100l:4
-#SBATCH --cpus-per-task=24
+#SBATCH --time=1-10:00
+#SBATCH --gres=gpu:v100:8             # CEDAR=--gres=gpul:v100:4 GRAHAM=--gres=gpu:v100:8
+#SBATCH --cpus-per-task=28
 #SBATCH --account=def-bengioy
-#SBATCH --mem=0
+#SBATCH --output=pre_%j.out
+#SBATCH --mem=178G
 
 echo 'Copying and unpacking dataset on local compute node...'
 tar -xf ~/scratch/data/images-224.tar -C $SLURM_TMPDIR
@@ -13,6 +14,12 @@ cp ~/scratch/data/Data_Entry_2017.csv $SLURM_TMPDIR
 
 echo ''
 echo 'Starting task !'
+dt=$(date '+%d-%m-%Y-%H-%M-%S');
+echo 'Time Signature: ${dt}'
+pretrain_dir="/home/${1:-yancote1}/models/pretrain/"
+mkdir -p $pretrain_dir
+out_dir=$pretrain_dir$dt
+
 echo 'Load Modules Python !'
 # module load arch/avx512 StdEnv/2018.3
 # nvidia-smi
@@ -31,7 +38,7 @@ pip3 install --no-index pyasn1
 echo -e 'Installing tensorflow_gpu-hub ******************************\n'
 pip3 install --no-index tensorflow_gpu
 echo -e 'Installing TensorFlow-hub ******************************\n'
-pip3 install --no-index ~/python_packages/tensorflow_hub-0.9.0-py2.py3-none-any.whl
+pip3 install --no-index ~/python_packages/tensorflow-hub/tensorflow_hub-0.9.0-py2.py3-none-any.whl
 pip3 install --no-index tensorboard
 pip3 install --no-index termcolor
 pip3 install --no-index pandas
@@ -43,7 +50,21 @@ pip3 install --no-index pyYAML
 pip3 install --no-index scikit-learn
 
 echo 'Calling python script'
-dt=$(date '+%d-%m-%Y-%H-%M-%S');
-stdbuf -oL python -u simclr-master/run.py --local_tmp_folder $SLURM_TMPDIR --train_batch_size 80 --eval_batch_size 80 --use_multi_gpus --optimizer adam --model_dir /scratch/maruel/runs/pretrain-simclr-img-ok/$dt --temperature 0.5
-# deactivate
 
+# --use_multi_gpus
+stdbuf -oL nohup python -u ./simclr_master/run.py --data_dir $SLURM_TMPDIR \
+--train_batch_size 2 \
+--optimizer adam \
+--model_dir $out_dir \
+--checkpoint_path $out_dir \
+--temperature 0.4 --train_epochs 1 --checkpoint_epochs 50 --weight_decay=0.0 --warmup_epochs=0 \
+--color_jitter_strength 0.5 &> run_${dt}.txt
+
+echo 'Time Signature: $dt'
+echo "Saving Monolytic File Archive in : ${out_dir}/run_${dt}.txt"
+cp run_${dt}.txt "${out_dir}/run_${dt}.txt"
+
+cd $pretrain_dir
+tar -zcvf $dt.tar.gz $out_dir --remove-files
+
+echo 'PreTraining Completed !!! '

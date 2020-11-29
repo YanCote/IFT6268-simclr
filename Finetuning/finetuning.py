@@ -114,8 +114,8 @@ def train(args, yml_config):
                 data_path = yml_config['dataset']['chest_xray']
             else:
                 data_path = args.xray_path
-            train_dataset, tfds_info = chest_xray.XRayDataSet(data_path,train_ratio=yml_config['finetuning']['train_data_ratio'], config=None, train=True)
-            num_images = tfds_info['num_examples']
+            train_dataset, tfds_info = chest_xray.XRayDataSet(data_path, config=None, train=True)
+            num_images = np.floor(yml_config['finetuning']['train_data_ratio'] *tfds_info['num_examples'])
             num_classes = tfds_info['num_classes']
             
         print(f"Training: {num_images} images...")
@@ -319,7 +319,6 @@ def train(args, yml_config):
                     if np.isnan(np.sum(logits)):
                         print(f"Loss has exploded: Nan")
                         break
-                    # =============== Main Loop (iteration) - END ===============
 
                 epoch_acc_all = (tot_acc_all/n_iter)
                 epoch_acc_per_class = (tot_acc_per_class / n_iter)
@@ -344,7 +343,7 @@ def train(args, yml_config):
 
                 current_time_epoch = time.time()
                 elapsed_time_iter = current_time_epoch - start_time_epoch
-                print(f"Finished EPOCH:{it} in: " + str(int(elapsed_time_iter)) + " sec")
+                print(f"Finished EPOCH:{it + 1} in: " + str(int(elapsed_time_iter)) + " sec")
                 # print(psutil.virtual_memory())
 
                 # ===================== Write Tensorboard summary ===============================

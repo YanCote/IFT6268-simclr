@@ -1,0 +1,89 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python: PreTraining",
+            "type": "python",
+            "request": "launch",
+            "program": "simclr_master/run.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--train_epochs=1",
+                // Paths
+                "--model_dir=output/",
+                "--checkpoint_path=output/",
+                "--data_dir=NIH/", 
+                // Run Settings   
+                "--train_batch_size=2",
+                "--eval_batch_size=2",
+                "--optimizer=adam",
+                "--use_multi_gpus=False",
+                "--dataset=chest_xray",
+                "--train_mode=pretrain",
+                "--warmup_epochs=0",
+                "--weight_decay=0.0",
+                // Projection Head
+                "--proj_head_mode=linear",
+                "--proj_out_dim=128",
+                "--num_proj_layers=1",
+                "--ft_proj_selector=-1",           
+            ]
+        },
+        {
+            "name": "Python: Generate HUB",
+            "type": "python",
+            "request": "launch",
+            "program": "simclr_master/run.py",
+            "console": "integratedTerminal",
+            "args": [
+                // Path
+                "--create_hub=True",
+                //"--checkpoint_path=/Users/yancote/mila/IFT6268-simclr/Finetuning/export_model/",
+                // "--checkpoint_path=/Users/yancote/mila/IFT6268-simclr/Finetuning/checkpoints/2020-11-19-16-00-58",
+                "--checkpoint_path=/Users/yancote/mila/IFT6268-simclr/models/pretrain/25-11-2020-11-13-07",
+                "--global_bn=False",
+                "--num_classes=14",
+                "--resnet_depth=50",
+                "--train_mode=pretrain",
+                "--keep_hub_module_max=1",
+                "--model_dir=/Users/yancote/mila/IFT6268-simclr/models/pretrain/25-11-2020-11-13-07",
+                "--optimizer=adam",
+            ]
+        },
+        {
+            "name": "Python: Finetune SimCLR",
+            "type": "python",
+            "request": "launch",
+            "program": "simclr_master/run.py",
+            "console": "integratedTerminal",
+            "args": [
+                // Path
+                "--model_dir=/Users/yancote/mila/IFT6268-simclr/output",
+                "--local_tmp_folder=/Users/yancote/mila/IFT6268-simclr/NIH", // XRAY Data Set Folder
+                "--checkpoint_path=output/checkpoints",
+                // Run Settings   
+                "--train_batch_size=2",
+                "--eval_batch_size=2",
+                "--optimizer=adam",
+                "--use_multi_gpus=False",
+                "--dataset=chest_xray",
+                "--train_mode=finetune",
+                "--zero_init_logits_layer=True",
+                "--warmup_epochs=0",
+                "--weight_decay=0.0",
+                // Finetuning
+                "--fine_tune_after_block=4",
+                // Projection Head
+                "--proj_head_mode=linear",
+                "--proj_out_dim=128",
+                "--num_proj_layers=1",
+                "--ft_proj_selector=-1",
+                // Run Settings
+                "--checkpoint=/Users/yancote/mila/IFT6268-simclr/pretrain/xray/11-11-2020-11-55-03",
+            ]
+        }
+    ]
+}

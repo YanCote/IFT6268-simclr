@@ -74,7 +74,7 @@ def evaluation(yml_config, args):
     #    loss_t = tf1.reduce_mean(tf1.reduce_sum(cross_entropy, axis=1))
 #
     #variables_to_train = tf1.trainable_variables()
-    #optimizer = LARSOptimizer
+    #optimizer = LARSOptimizer(
     #            0.2,
     #            momentum=0.1,
     #            weight_decay=0.0,
