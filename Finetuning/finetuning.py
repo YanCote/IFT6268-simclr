@@ -72,6 +72,7 @@ from shutil import rmtree
 from functools import partial
 import simclr_master.resnet as resnet
 from utils.create_folder import create_folder
+from Finetuning.validation import evaluation
 
 def test_weighted_cel():
     with tf1.Session():
@@ -147,7 +148,8 @@ def train(args, yml_config):
         load_saver = yml_config['finetuning'].get('load_ckpt')
 
         # Load the base network and set it to non-trainable (for speedup fine-tuning)
-        hub_path = str(Path(yml_config['finetuning']['pretrained_hub_path']).resolve())
+        hub_path = str(Path(yml_config['finetuning']['pretrained_build']).resolve())
+        hub_path  = os.path.join(hub_path , 'hub')
         module = hub.Module(hub_path, trainable=yml_config['finetuning']['train_resnet'])
         
         if  yml_config['finetuning']['pretrained_model'] == 'ChestXRay':
@@ -197,7 +199,7 @@ def train(args, yml_config):
         sess = tf1.Session()
         Saver = tf1.train.Saver() # Default saves all variables
         current_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-        directory = Path(yml_config['checkpoint_dir'])/current_time
+        directory = Path(args.output_dir)/current_time
 
         is_time_to_save_session = partial(model_ckpt.save_session, epoch_save_step, Saver, output=directory)
         if load_saver is not None:
@@ -236,33 +238,37 @@ def train(args, yml_config):
         np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
         with sess.as_default() as scope:
             if yml_config['mlflow']:
-                fname = str(directory / f'params.pickle')
+                #save finutning params in pickle file
+                fname = os.path.join(directory, 'params.pickle')
                 create_folder(directory)
                 with open(fname,'wb') as f:
                     pickle.dump(yml_config['finetuning'], f)
+                
+                # open pickle file that contains the hyper params of pretuned
+                fname  = os.path.join(yml_config['finetuning']['pretrained_build'], 'experiment_flags.p')
+                with open(fname,'rb') as f:
+                    pretuned_params = pickle.load(f)
+                pretuned_params  = {'P-' + str(key).replace('/', '').replace('?', '').replace('$', ''): val for key, val in pretuned_params.items()}     
+                finetuned_params =  {'F-' + str(key).replace('/', ''): val for key, val in yml_config['finetuning'].items()}                 
+                
+                # log params in MLFLOW
                 mlflow.set_tracking_uri(yml_config['mlflow_path'])
-                mlflow.set_experiment('fine_tuning')
+                mlflow.set_experiment('results')
                 mlflow.start_run()
                 mlflow.log_artifact(fname)
                 mlflow.log_param('TB_Timestamp', current_time)
-                mlflow.log_param('Train or Test', 'Train')
-                mlflow.log_params(yml_config['finetuning'])
+                mlflow.log_params(pretuned_params )
+                mlflow.log_params(finetuned_params)     
             
-            fname = str(directory / f'finetuning_hyper_params.txt')
-            # f = open(fname,"w")
-            # f.write( str(yml_config['finetuning']) )
-            # f.close()
+            fname = os.path.join(directory, 'finetuning_hyper_params.txt')
             with open(fname, 'w') as f: 
                 for key, value in yml_config['finetuning'].items(): 
                     f.write('%s:%s\n' % (key, value)) 
-
-
             
             writer = tf1.summary.FileWriter('./log', sess.graph)
             for index,summary_op in enumerate(hyper_param):
                 text = sess.run(summary_op)
                 summ_writer.add_summary(text, index)
-
 
             n_iter = int(num_images / batch_size)
             print(f"Batch:{batch_size}, n_iter:{n_iter} ")
@@ -322,8 +328,8 @@ def train(args, yml_config):
                     elapsed_time_iter = current_time_iter - start_time_iter
 
                     if yml_config['finetuning']['verbose_train_loop']:
-                        print(f"[Epoch {it + 1}/{epochs} Iter: {step}/{n_iter}] Model: {yml_config['finetuning']['pretrained_model']}, Total Loss: {train_tot_loss} Loss: {np.float32(loss)} Batch Acc: {np.float32(acc_all)} "
-                              f"Acc Avg(class): {np.float32(acc_class_avg)}, AUC Cumulative: {auc_cum}")
+                        print(f"[Epoch {it + 1}/{epochs} Iter: {step}/{n_iter}] Model: {yml_config['finetuning']['pretrained_model']}, Total Loss: {train_tot_loss} Loss: {np.float32(loss)}" # Batch Acc: {np.float32(acc_all)} "
+                              f"AUC Cumulative: {auc_cum}")
                         print(f"Finished iteration:{step} in: " + str(int(elapsed_time_iter)) + " sec")
                     
                     # break if logits explose
@@ -331,9 +337,10 @@ def train(args, yml_config):
                         print(f"Loss has exploded: Nan")
                         break
 
-                epoch_acc_all = (tot_acc_all/n_iter)
-                epoch_acc_per_class = (tot_acc_per_class / n_iter)
-                epoch_acc_class_avg = (tot_acc_class_avg / n_iter)
+                
+                #epoch_acc_all = (tot_acc_all/n_iter)
+                #epoch_acc_per_class = (tot_acc_per_class / n_iter)
+                #epoch_acc_class_avg = (tot_acc_class_avg / n_iter)
 
 
                 try:
@@ -346,7 +353,7 @@ def train(args, yml_config):
                     epoch_auc= None
                     epoch_auc_mean= None
 
-                print(f"[Epoch {it + 1}/{epochs} Model: {yml_config['finetuning']['pretrained_model']}, Loss: {train_tot_loss} Train Acc: {np.float32(epoch_acc_all)}, Train Acc Avg(class) {np.float32(epoch_acc_class_avg)}"
+                print(f"[Epoch {it + 1}/{epochs} Model: {yml_config['finetuning']['pretrained_model']}, Loss: {train_tot_loss} " #Train Acc: {np.float32(epoch_acc_all)}, Train Acc Avg(class) {np.float32(epoch_acc_class_avg)}"
                       f" Train AUC: {epoch_auc_mean} AOC/Class {epoch_auc},")
                 
                 # Is it time to save the session?
@@ -385,9 +392,11 @@ def train(args, yml_config):
                 if epoch_auc is not None:
                     mlflow.log_metrics(auc_scores)
 
+            fname_final = str(directory / f'final.ckpt')
             #rmtree(str(Path.cwd() / yml_config['finetuning']['finetuned_cp']))
-            #ckpt_pt = Saver.save(sess=sess,save_path=str(Path.cwd() / yml_config['finetuning']['finetuned_cp'] / 'pt'), global_step=step)
-            #print(f"Final Chekpoint Saved in {yml_config['finetuning']['finetuned_cp']}")
+            ckpt_pt = Saver.save(sess=sess,save_path=fname_final)
+            print(f"Final Chekpoint Saved in {fname_final}")
+            return directory
 
 
 def build_hub_module(yml_config, num_classes, hub_id_name, checkpoint_path, save_path):
@@ -408,7 +417,8 @@ def build_hub_module(yml_config, num_classes, hub_id_name, checkpoint_path, save
             tf1.float32, [None, None, None, 3])
 
         # Load the base network and set it to non-trainable (for speedup fine-tuning)
-        hub_path = str(Path(yml_config['finetuning']['pretrained_hub_path']).resolve())
+        hub_path = str(Path(yml_config['finetuning']['pretrained_build']).resolve())
+        hub_path  = os.path.join(hub_path , 'hub')
         module = hub.Module(hub_path, trainable=is_training)
 
         if  yml_config['finetuning']['pretrained_model'] == 'ChestXRay':
@@ -426,30 +436,39 @@ def build_hub_module(yml_config, num_classes, hub_id_name, checkpoint_path, save
                           outputs=dict(endpoints, default=logits_t))
 
     spec = hub.create_module_spec(module_fn, tags_and_args)
-    hub_export_dir = os.path.join(save_path, 'hub')
-    checkpoint_export_dir = os.path.join(hub_export_dir, str(hub_id_name))
+    checkpoint_export_dir = os.path.join(save_path, 'hub')
     create_folder(checkpoint_export_dir)
     spec.export(
         checkpoint_export_dir,
         checkpoint_path=checkpoint_path,
         name_transform_fn=None)
 
-    return hub_export_dir
+    return checkpoint_export_dir 
 
-def create_module_from_checkpoints(yml_config):
-    hub_id_name = 'chest_xray'
+def create_module_from_checkpoints(yml_config, checkpoint_path):
+    hub_id_name = yml_config['finetuning']['pretrained_model']
     num_classes = 14
-    checkpoint_path = yml_config['finetuning'].get('load_ckpt')
-    save_path = os.path.abspath("./saved_modules")
-    p = build_hub_module(yml_config, num_classes, dataset_name, checkpoint_path, save_path)
-
+    p = build_hub_module(yml_config, num_classes, hub_id_name, checkpoint_path, checkpoint_path)
     print("Module hub saved at {0} with id name {1}".format(p, hub_id_name))
+    return p
+
 
 def main(args, yml_config, save_hub=False):
     if not save_hub:
-        train(args, yml_config)
+        print("Start of Finetuning model")
+        directory = train(args, yml_config)
+        print("Finetuning Completed")
+        print("Creation of the final hub from last checkpoint")
+        hub_export_dir = create_module_from_checkpoints(yml_config, str(directory))
+        print("Hub Created Successfully")
+        print("Evaluation Started")
+        evaluation(yml_config, args, module_path=hub_export_dir)
+        print("Evaluation Completed with Success")
+        print('All steps completed')
+
     else:
-        create_module_from_checkpoints(yml_config)
+        checkpoint_path = yml_config['finetuning'].get('load_ckpt')
+        create_module_from_checkpoints(yml_config, checkpoint_path)
 
 
 if __name__ == "__main__":
@@ -462,6 +481,7 @@ if __name__ == "__main__":
                         help='yml configuration file')
     parser.add_argument('--save_hub', action='store_true', default=False,
                         help='yml configuration file')
+    parser.add_argument('--output_dir', required=True, help='Folder that contains all the outputs')
     args = parser.parse_args()
 
     # Yaml configuration files
