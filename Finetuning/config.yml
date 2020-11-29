@@ -37,7 +37,7 @@ finetuning:
 
 inference:
     batch                    : 5
-    pretrained_hub_path'     : './r50_1x_sk0/'
+    pretrained_hub_path      : './r50_1x_sk0/'
 
 
 distillation:
