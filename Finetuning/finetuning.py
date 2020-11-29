@@ -230,7 +230,7 @@ def train(args, yml_config):
         for item in yml_config['finetuning']:
             hyper_param.append(tf1.summary.text(str(item), tf.constant(str(yml_config['finetuning'][item])),'HyperParam'))
 
-        summ_writer = tf1.summary.FileWriter(Path(yml_config['tensorboard_path']) / current_time, sess.graph)
+        summ_writer = tf1.summary.FileWriter(directory / 'tb', sess.graph)
         tf.summary.record_if(yml_config['tensorboard'])
         # Limit the precision of floats...
         np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
@@ -247,6 +247,17 @@ def train(args, yml_config):
                 mlflow.log_param('TB_Timestamp', current_time)
                 mlflow.log_param('Train or Test', 'Train')
                 mlflow.log_params(yml_config['finetuning'])
+            
+            fname = str(directory / f'finetuning_hyper_params.txt')
+            # f = open(fname,"w")
+            # f.write( str(yml_config['finetuning']) )
+            # f.close()
+            with open(fname, 'w') as f: 
+                for key, value in yml_config['finetuning'].items(): 
+                    f.write('%s:%s\n' % (key, value)) 
+
+
+            
             writer = tf1.summary.FileWriter('./log', sess.graph)
             for index,summary_op in enumerate(hyper_param):
                 text = sess.run(summary_op)
