@@ -21,12 +21,10 @@ ls -l -d ~/*/
 mlflow_dir="/home/${1:-gauthies}/IFT6268-simclr/mlruns"
 
 dt=$(date '+%d-%m-%Y-%H-%M-%S');
-echo 'Time Signature: ${dt}'
-out_dir="/home/${1:-gauthies}/finetuning/"
-fname = 'finetuning.txt'
-mkdir -p $out_dir
-out_dir= $out_dir$dt
-echo $out_dir
+echo "Time Signature: ${dt}"
+out_dir_f="/home/${1:-gauthies}/finetuning/"
+mkdir -p $out_dir_f
+out_dir="${out_dir_f}${dt}"
 mkdir -p $out_dir
 
 echo 'Starting task !'
@@ -79,7 +77,7 @@ stdbuf -oL python -u ./Finetuning/finetuning.py \
 --output_dir $out_dir \
 --mlflow_dir $mlflow_dir| tee finetuning_${dt}.txt
 
-echo 'Time Signature: $dt'
-echo "Saving Monolytic File Archive in : ${out_dir}finetuning${dt}.txt"
+echo "Time Signature: ${dt}"
+echo "Saving Monolytic File Archive in : ${out_dir}/finetuning${dt}.txt"
 mv finetuning_${dt}.txt "${out_dir}/finetuning_${dt}.txt"
 
