@@ -615,10 +615,10 @@ def create_module_from_checkpoints(args):
     print('Hub Module Created')
 
     # Copy hyper-param file 
-    if os.path.exists(os.path.join(FLAGS.checkpoint_path, "experiment_flags.txt")):
-        from shutil import copyfile
-        copyfile(os.path.join(FLAGS.checkpoint_path, "experiment_flags.txt"), 
-                os.path.join(hub_export_dir, hub_name, "hyper-parameters.txt"))
+    # if os.path.exists(os.path.join(FLAGS.checkpoint_path, "experiment_flags.txt")):
+    #     from shutil import copyfile
+    #     copyfile(os.path.join(FLAGS.checkpoint_path, "experiment_flags.txt"),
+    #             os.path.join(hub_export_dir, hub_name, "hyper-parameters.txt"))
     # sys.exit(0)
     
 

@@ -39,7 +39,6 @@ virtualenv --no-download $SLURM_TMPDIR/env
 echo 'Source VENV'
 source $SLURM_TMPDIR/env/bin/activate
 echo 'Installing package'
-# pip3 install --no-index --upgrade pip
 pip3 install --no-index pyasn1
 echo -e 'Installing tensorflow_gpu-hub ******************************\n'
 pip3 install --no-index tensorflow_gpu
@@ -63,13 +62,13 @@ stdbuf -oL nohup python -u ./simclr_master/run.py --data_dir $SLURM_TMPDIR \
 --model_dir $out_dir \
 --use_multi_gpus \
 --checkpoint_path $out_dir \
---learning_rate 0.5 \
+--learning_rate 0.1 \
 --use_blur \
---temperature 0.5 \
+--temperature 0.2 \
 --proj_out_dim 128 \
 --train_epochs 1 \
 --checkpoint_epochs 500 \
---train_summary_steps 0 \
+--train_summary_steps 50 \
 --color_jitter_strength 0.5 > run_${dt}.txt 2>&1;
 then
 echo "Time Signature:"$dt
@@ -80,7 +79,7 @@ cd $pretrain_dir
 echo "PWD"
 echo $PWD
 tar -cvf $dt.tar.gz $dt
-#mv $dt.tar.gz ../
+
 fi
 echo $dt
 echo 'PreTraining Completed !!! '
