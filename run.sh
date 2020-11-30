@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --time=2-10:00
+#SBATCH --time=4-10:00
 #SBATCH --cpus-per-task=24
 #SBATCH --account=def-bengioy
 #SBATCH --output=pre_%j.out
