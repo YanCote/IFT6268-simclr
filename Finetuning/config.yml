@@ -19,7 +19,6 @@ finetuning:
     batch                   : 64
     optimizer               : 'lars'
     learning_rate           : 0.05
-    pos_weight_loss         : 10 
     momentum                : 0.9
     weight_decay            : 0.1
     buffer_size             : 256
@@ -34,10 +33,9 @@ finetuning:
     
 
 
-
 inference:
     batch                    : 5
-    pretrained_hub_path'     : './r50_1x_sk0/'
+    pretrained_hub_path      : './r50_1x_sk0/'
 
 
 distillation:
