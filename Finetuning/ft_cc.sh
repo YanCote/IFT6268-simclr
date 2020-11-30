@@ -80,6 +80,6 @@ stdbuf -oL python -u ./Finetuning/finetuning.py \
 --mlflow_dir $mlflow_dir| tee finetuning_${dt}.txt
 
 echo 'Time Signature: $dt'
-echo "Saving Monolytic File Archive in : ${out_dir}/finetuning${dt}.txt"
+echo "Saving Monolytic File Archive in : ${out_dir}finetuning${dt}.txt"
 mv finetuning_${dt}.txt "${out_dir}/finetuning_${dt}.txt"
 
