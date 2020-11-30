@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --time=0-03:00
+#SBATCH --time=0-01:00
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=1
 #SBATCH --account=def-bengioy
@@ -18,8 +18,16 @@ ls -l -d ~/scratch/*/
 echo 'List2'
 ls -l -d ~/*/
 
-mlflow_dir="/home/${1:-gauthies}/IFT6268-simclr/mlruns "
+mlflow_dir="/home/${1:-gauthies}/IFT6268-simclr/mlruns"
 
+dt=$(date '+%d-%m-%Y-%H-%M-%S');
+echo 'Time Signature: ${dt}'
+out_dir="/home/${1:-gauthies}/finetuning/"
+fname = 'finetuning.txt'
+mkdir -p $out_dir
+out_dir= $out_dir$dt
+echo $out_dir
+mkdir -p $out_dir
 
 echo 'Starting task !'
 echo 'Load Modules Python !'
@@ -66,8 +74,12 @@ pip3 install --no-index ~/python_packages/tensorflow-datasets/tensorflow_dataset
 
 echo 'Calling python script'
 stdbuf -oL python -u ./Finetuning/finetuning.py \
---config ./Finetuning/configchest_big.yml \
+--config ./Finetuning/config.yml \
 --xray_path $SLURM_TMPDIR \
---output_dir '/home/gauthies/scratch/build/' \
---mlflow_dir $mlflow_dir| tee finetuning.txt
-# deactivatels
+--output_dir $out_dir \
+--mlflow_dir $mlflow_dir| tee finetuning_${dt}.txt
+
+echo 'Time Signature: $dt'
+echo "Saving Monolytic File Archive in : ${out_dir}/finetuning${dt}.txt"
+mv finetuning_${dt}.txt "${out_dir}/finetuning_${dt}.txt"
+
