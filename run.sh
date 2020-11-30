@@ -2,13 +2,11 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --time=2-10:00
-#SBATCH --cpus-per-task=40
+#SBATCH --cpus-per-task=24
 #SBATCH --account=def-bengioy
 #SBATCH --output=pre_%j.out
-#SBATCH --mem=180G
-#SBATCH --gres=gpu:v100:4
-#SBATCH --mail-user=yan.cote.1@umontreal.ca
-#SBATCH --mail-type=END
+#SBATCH --mem=178G
+#SBATCH --gres=gpu:v100l:4
 
 # Compute Canada Configuration
 #CEDAR= --gres=gpul:v100:4 -> mem=178G or 250G || gres=gpul:p100l:4 ->  mem=120G
@@ -23,6 +21,7 @@ echo ''
 echo 'Starting task !'
 dt=$(date '+%d-%m-%Y-%H-%M-%S');
 echo 'Time Signature: $dt'
+echo $dt
 pretrain_dir="/home/${1:-yancote1}/models/pretrain/"
 mkdir -p $pretrain_dir
 out_dir=$pretrain_dir$dt
@@ -69,16 +68,19 @@ stdbuf -oL nohup python -u ./simclr_master/run.py --data_dir $SLURM_TMPDIR \
 --temperature 0.5 \
 --proj_out_dim 128 \
 --train_epochs 1 \
---checkpoint_epochs 50 \
---color_jitter_strength 0.5 > run_${dt}.txt  2>&1;
+--checkpoint_epochs 200 \
+--train_summary_steps 0 \
+--color_jitter_strength 0.5 > run_${dt}.txt 2>&1;
 then
-echo 'Time Signature: $dt'
+echo "Time Signature:"$dt
 echo "Saving Monolytic File Archive in : ${out_dir}/run_${dt}.txt"
 cp run_${dt}.txt "${out_dir}/run_${dt}.txt"
 
-cd $pretrain_dir/$dt
+cd $pretrain_dir$dt
+echo "PWD"
 echo $PWD
-tar -zcvf $dt.tar.gz .
-cd $dt.tar.gz ../
+tar -zcvf --recursive-unlink $dt.tar.gz .
+mv $dt.tar.gz ../
 fi
+echo $dt
 echo 'PreTraining Completed !!! '
