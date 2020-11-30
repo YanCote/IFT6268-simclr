@@ -54,7 +54,8 @@ def evaluation(yml_config, args, module_path=None):
     x = x_iter.get_next()
 
     key = module(x['image'], as_dict=True)
-    cross_entropy = tf.nn.weighted_cross_entropy_with_logits(labels=x['label'], logits=key['default'],  pos_weight=yml_config['finetuning']['pos_weight_loss'])
+    #cross_entropy = tf.nn.weighted_cross_entropy_with_logits(labels=x['label'], logits=key['default'],  pos_weight=yml_config['finetuning']['pos_weight_loss'])
+    cross_entropy = weighted_cel(labels=x['label'], logits=key['default'], bound = 3.0)
     loss = tf1.reduce_mean(tf1.reduce_sum(cross_entropy, axis=1))
 
     

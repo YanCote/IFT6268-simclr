@@ -195,7 +195,7 @@ def train(args, yml_config):
         sess = tf1.Session()
         Saver = tf1.train.Saver() # Default saves all variables
         current_time = datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
-        directory = Path(args.output_dir)/current_time
+        directory = Path(args.output_dir)
 
         is_time_to_save_session = partial(model_ckpt.save_session, epoch_save_step, Saver, output=directory)
         if load_saver is not None:
@@ -487,12 +487,7 @@ if __name__ == "__main__":
     else:  # use default strategy
         strategy = tf.distribute.get_strategy()
 
-
-    # Profiler
-    # tf.profiler.experimental.server.start(6009)
-    # tf.profiler.experimental.client.trace('grpc://127.0.0.1:6009',
-    #                                       'gs://local_dir', 2000)
-
     main(args, yml_config, args.save_hub)
+
 
     
