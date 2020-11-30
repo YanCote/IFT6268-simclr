@@ -78,8 +78,8 @@ def evaluation(yml_config, args, module_path=None):
                 auc_cum = None
 
 
-            if yml_config['finetuning']['verbose_train_loop']:
-                print(f" [Iter: {step}/{n_iter}] Total Loss: {val_tot_loss} Loss: {np.float32(_loss)}  AUC Cumulative: {auc_cum}")
+            #if yml_config['finetuning']['verbose_train_loop']:
+            print(f" [Iter: {step}/{n_iter}] Total Loss: {val_tot_loss} Loss: {np.float32(_loss)}  AUC Cumulative: {auc_cum}")
 
 
         val_tot_loss_mean = val_tot_loss / n_iter
