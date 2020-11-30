@@ -1,0 +1,15 @@
+artifact_uri: /home/gauthies/IFT6268-simclr/mlruns/1/46b9b9923bef45d6aa6b53a7b6d2afd5/artifacts
+end_time: 1606702959335
+entry_point_name: ''
+experiment_id: '1'
+lifecycle_stage: active
+name: ''
+run_id: 46b9b9923bef45d6aa6b53a7b6d2afd5
+run_uuid: 46b9b9923bef45d6aa6b53a7b6d2afd5
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1606702659904
+status: 3
+tags: []
+user_id: gauthies
