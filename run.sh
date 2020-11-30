@@ -1,12 +1,17 @@
 #!/bin/bash
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --time=1-10:00
-#SBATCH --gres=gpu:v100:8             # CEDAR=--gres=gpul:v100:4 GRAHAM=--gres=gpu:v100:8
-#SBATCH --cpus-per-task=28
+#SBATCH --time=2-10:00
+#SBATCH --cpus-per-task=24
 #SBATCH --account=def-bengioy
 #SBATCH --output=pre_%j.out
 #SBATCH --mem=178G
+#SBATCH --gres=gpu:v100l:4
+
+# Compute Canada Configuration
+#CEDAR= --gres=gpul:v100:4 -> mem=178G or 250G || gres=gpul:p100l:4 ->  mem=120G
+#GRAHAM --gres=gpu:v100:8 -> mem=178G or 377G  || gres=gpul:p100:2 ->  mem=120G
+#BELUGA --gres=gpu:v100:4 -> mem=186G
 
 echo 'Copying and unpacking dataset on local compute node...'
 tar -xf ~/scratch/data/images-224.tar -C $SLURM_TMPDIR
@@ -15,7 +20,8 @@ cp ~/scratch/data/Data_Entry_2017.csv $SLURM_TMPDIR
 echo ''
 echo 'Starting task !'
 dt=$(date '+%d-%m-%Y-%H-%M-%S');
-echo 'Time Signature: ${dt}'
+echo 'Time Signature: $dt'
+echo $dt
 pretrain_dir="/home/${1:-yancote1}/models/pretrain/"
 mkdir -p $pretrain_dir
 out_dir=$pretrain_dir$dt
@@ -50,21 +56,31 @@ pip3 install --no-index pyYAML
 pip3 install --no-index scikit-learn
 
 echo 'Calling python script'
-
-# --use_multi_gpus
+if
 stdbuf -oL nohup python -u ./simclr_master/run.py --data_dir $SLURM_TMPDIR \
---train_batch_size 2 \
+--train_batch_size 80 \
 --optimizer adam \
 --model_dir $out_dir \
+--use_multi_gpus \
 --checkpoint_path $out_dir \
---temperature 0.4 --train_epochs 1 --checkpoint_epochs 50 --weight_decay=0.0 --warmup_epochs=0 \
---color_jitter_strength 0.5 &> run_${dt}.txt
-
-echo 'Time Signature: $dt'
+--learning_rate 0.5 \
+--use_blur \
+--temperature 0.5 \
+--proj_out_dim 128 \
+--train_epochs 1 \
+--checkpoint_epochs 500 \
+--train_summary_steps 0 \
+--color_jitter_strength 0.5 > run_${dt}.txt 2>&1;
+then
+echo "Time Signature:"$dt
 echo "Saving Monolytic File Archive in : ${out_dir}/run_${dt}.txt"
 cp run_${dt}.txt "${out_dir}/run_${dt}.txt"
 
 cd $pretrain_dir
-tar -zcvf $dt.tar.gz $out_dir --remove-files
-
+echo "PWD"
+echo $PWD
+tar -cvf $dt.tar.gz $dt
+#mv $dt.tar.gz ../
+fi
+echo $dt
 echo 'PreTraining Completed !!! '

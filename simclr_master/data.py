@@ -106,7 +106,7 @@ def pad_to_batch(dataset, batch_size):
 
     return dataset.map(_pad_to_batch)
 
-def build_chest_xray_fn(use_multi_gpus, data_path, _, is_training):
+def build_chest_xray_fn(use_multi_gpus, data_path, _, is_training, metric = False):
     def _input_fn(params):
         """Inner input function."""
         preprocess_fn_pretrain = get_preprocess_fn(
@@ -118,17 +118,27 @@ def build_chest_xray_fn(use_multi_gpus, data_path, _, is_training):
             """Produces multiple transformations of the same batch."""
             image = data_point['image']
             label = data_point['label']
-            if FLAGS.train_mode == 'pretrain' or FLAGS.train_mode == 'eval_ssl':
+            if FLAGS.train_mode == 'pretrain' or FLAGS.train_mode == 'eval':
                 xs = []
                 for _ in range(2):  # Two transformations
                     xs.append(preprocess_fn_pretrain(image))
                 image = tf.concat(xs, -1)
             else:
                 image = preprocess_fn_finetune(image)
-            return image, label, 1.0 , data_point.get('idx')
-        
-        def map_fn2(image, label, mask, idx):
-            return (image, {'labels':label, 'mask':mask, 'idx': idx})
+            # if FLAGS.train_mode != 'pretrain':
+            if metric:
+                return image, label, 1.0, data_point.get('idx')
+            else:
+                return image, label, 1.0  # , data_point.get('idx')
+            # else:
+            #     return image, label, 1.0, data_point.get('idx')
+
+        def map_fn2(image, label, mask):
+            return (image, {'labels':label, 'mask':mask})
+
+        def map_fn3(image, label, mask, idx):
+             return (image, {'labels':label, 'mask':mask, 'idx': idx})
+
 
         dataset, info = chest_xray.XRayDataSet(data_path, config=None, train=is_training)
         if FLAGS.cache_dataset:
@@ -144,8 +154,12 @@ def build_chest_xray_fn(use_multi_gpus, data_path, _, is_training):
 
         if use_multi_gpus:
             dataset = pad_to_batch(dataset, params['batch_size'])
-            dataset = dataset.map(map_fn2,
-                        num_parallel_calls=tf.data.experimental.AUTOTUNE)
+            if metric:
+                dataset = dataset.map(map_fn3,
+                            num_parallel_calls=tf.data.experimental.AUTOTUNE)
+            else:
+                dataset = dataset.map(map_fn2,
+                            num_parallel_calls=tf.data.experimental.AUTOTUNE)
             return dataset
         else:
             images, labels, mask = tf.data.make_one_shot_iterator(
