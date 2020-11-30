@@ -257,8 +257,12 @@ flags.DEFINE_float(
     'color_jitter_strength', 0.5,
     'The strength of color jittering.')
 
+flags.DEFINE_float(
+    'train_data_split', 0.9,
+    'TPortion of Data for training SHOULD be 0.9')
+
 flags.DEFINE_boolean(
-    'use_blur', True,
+    'use_blur', False,
     'Whether or not to use Gaussian blur for augmentation during pretraining.')
 
 flags.DEFINE_string(
@@ -271,8 +275,11 @@ flags.DEFINE_integer(
 
 flags.DEFINE_bool(
     'create_hub', False,
-    'IF True create a hub from a checkpoint in flags.checkpoint... else run main app')    
+    'IF True create a hub from a checkpoint in flags.checkpoint... else run main app')
 
+flags.DEFINE_bool(
+    'compute_ssl_metric', True,
+    'Compute custom SSL Metric, see Marc-Andre')
 
 
 def build_hub_module(model, num_classes, global_step, checkpoint_path):
@@ -406,7 +413,7 @@ def main(argv):
             # TODO config
             #data_path = FLAGS.local_tmp_folder
             data_path = FLAGS.data_dir
-            data_split = 0.9
+            data_split = FLAGS.train_data_split
             print(f"***********************************************************************************")
             print("")
             print(f"DANGER WARNING ON SPLIT -> XRAY Data split:{data_split} SHOULD BE 0.9")
@@ -481,6 +488,7 @@ def main(argv):
         pickle.dump(FLAGS.flag_values_dict(), open(os.path.join(FLAGS.model_dir, 'experiment_flags.p'), "wb"))
         FLAGS.append_flags_into_file(os.path.join(FLAGS.model_dir, 'experiment_flags.txt'))
 
+
         # Train/Eval
         if FLAGS.mode == 'eval':
             for ckpt in tf.train.checkpoints_iterator(
@@ -507,8 +515,83 @@ def main(argv):
                     eval_steps=eval_steps,
                     model=model,
                     num_classes=num_classes)
-        #Save the Hub in all case
-        app.run(create_module_from_checkpoints)
+        # Save the Hub in all case
+        # app.run(create_module_from_checkpoints)
+        create_module_from_checkpoints(argv)
+
+        # Compute SSL metric:
+        if FLAGS.compute_ssl_metric:
+            compute_ssl_metric()
+
+
+
+from simclr_master.data import build_chest_xray_fn
+import eval_ssl.test_tools as test_tools
+from pathlib import Path
+
+def compute_ssl_metric():
+    # SSL Metric computing
+    tf.compat.v1.disable_eager_execution()
+
+    data_path = "/Users/yancote/mila/IFT6268-simclr/NIH"
+    data_path = FLAGS.data_dir
+    hub_path = os.path.abspath('/Users/yancote/mila/IFT6268-simclr/models/29-11-2020-01-56-45/hub')  # ("./r50_1x_sk0/hub")
+    hub_path = str(Path(FLAGS.checkpoint_path) / 'hub')
+    module = hub.Module(hub_path, trainable=False)
+
+    sess = tf.compat.v1.Session()
+
+    nb_of_patients = 100
+    features = {}
+
+    chest_xray_dataset = build_chest_xray_fn(True, data_path, None, False,metric=True)({'batch_size': 100}).prefetch(1)
+    _, info = chest_xray.XRayDataSet(data_path, train=False)
+    chest_xray_dataset_itr = tf.compat.v1.data.make_one_shot_iterator(chest_xray_dataset)
+    x = chest_xray_dataset_itr.get_next()
+    chest_xray_dataset_init = chest_xray_dataset_itr.make_initializer(chest_xray_dataset)
+    with sess.as_default():
+        sess.run(tf.compat.v1.global_variables_initializer())
+        for step in range(10):
+            # Keep a total of 200 patients
+            if len(features) >= nb_of_patients:
+                break
+            x1, x2 = tf.split(x[0], 2, -1)
+            feat1, feat2, idx_s = sess.run(fetches=(module(x1), module(x2), x[1].get('idx')))
+            for i in range(feat1.shape[0]):
+                if len(features) >= nb_of_patients:
+                    break
+                idx = idx_s[i].decode("utf-8").split("_")[0]
+                # Only add a single example for each patient.
+                if features.get(idx) is None:
+                    features[idx] = []
+                    features[idx].append(feat1[i])
+                    features[idx].append(feat2[i])
+
+    # Save hardwork
+    output = os.path.abspath("./eval_ssl/model_out")
+    Path(output).mkdir(parents=True, exist_ok=True)
+    file_name = os.path.join(output, 'outputs_{}.pickle'.format("test"))
+    print("Saving outputs in: {}".format(file_name))
+    with open(file_name, 'wb') as handle:
+        pickle.dump(features, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    # Calculate mAP
+    print("Calculating mAPs...")
+    mAPs, quantiles = test_tools.test_mAP_outputs(epochs=[features], with_filepath=False)
+
+    mAP_dict = {
+        "P_mAP": mAPs[0][0],
+        "P_mAP_var": mAPs[0][1],
+        "P_mAP_var": mAPs[0][1],
+        "P_mAP_quant_20p": quantiles[0][0],
+        "P_mAP_median": quantiles[0][1],
+        "P_mAP_quant_80p": quantiles[0][2]
+    }
+    pickle.dump(mAP_dict, open(os.path.join(FLAGS.checkpoint_path, 'mAP_result.p'), "wb"))
+    if mAPs is not None:
+        print("\nResults:")
+        print("mAP: {}, var: {}, quantiles 0.2: {}, median: {}, 0.8: {}".format(
+            mAPs[0][0], mAPs[0][1], quantiles[0][0], quantiles[0][1], quantiles[0][2]))
 
 def create_module_from_checkpoints(args):
 
@@ -532,7 +615,7 @@ def create_module_from_checkpoints(args):
         from shutil import copyfile
         copyfile(os.path.join(FLAGS.checkpoint_path, "experiment_flags.txt"), 
                 os.path.join(hub_export_dir, hub_name, "hyper-parameters.txt"))
-    sys.exit(0)
+    # sys.exit(0)
     
 
 if __name__ == '__main__':

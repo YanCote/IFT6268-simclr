@@ -46,7 +46,8 @@ def main(argv):
     nb_of_patients = 100
     features = {}
 
-    chest_xray_dataset = build_chest_xray_fn(True, data_path, None, False)({'batch_size': 100}).prefetch(1)
+    chest_xray_dataset = build_chest_xray_fn(True,data_path, None, is_training=False, \
+                                             metric=True)({'batch_size': 100}).prefetch(1)
     _, info = chest_xray.XRayDataSet(data_path, train=False)
     chest_xray_dataset_itr = tf.compat.v1.data.make_one_shot_iterator(chest_xray_dataset)
     x = chest_xray_dataset_itr.get_next()
