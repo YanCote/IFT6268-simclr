@@ -166,11 +166,7 @@ def train(args, yml_config):
                 labels=tf1.one_hot(x['label'], num_classes), logits=logits_t))
         elif dataset_name == 'chest_xray':
             with tf1.variable_scope('head_supervised_new', reuse=tf1.AUTO_REUSE):
-                #logits_t = tf1.layers.dense(inputs=key['final_avg_pool'], units=num_classes)
                 logits_t = tf1.layers.dense(inputs=key['default'], units=num_classes)
-                #cross_entropy = weighted_cel(labels=x['label'], logits=logits_t)
-                #cross_entropy = sigmoid_cross_entropy_with_logits(labels=x['label'], logits=logits_t)
-                #cross_entropy = tf.nn.weighted_cross_entropy_with_logits(labels=x['label'], logits=logits_t, pos_weight=2)
                 cross_entropy = weighted_cel(labels=x['label'], logits=logits_t, bound = 3.0)
                 loss_t = tf1.reduce_mean(tf1.reduce_sum(cross_entropy, axis=1))
 
@@ -246,7 +242,11 @@ def train(args, yml_config):
                 finetuned_params =  {'F-' + str(key).replace('/', ''): val for key, val in yml_config['finetuning'].items()}                 
                 
                 # log params in MLFLOW
-                mlflow.set_tracking_uri(yml_config['mlflow_path'])
+                if args.mlflow_dir is None:
+                    mlflow.set_tracking_uri(yml_config['mlflow_path'])
+                else:
+                    mlflow.set_tracking_uri(args.mlflow_dir)
+
                 mlflow.set_experiment('results')
                 mlflow.start_run()
                 mlflow.log_artifact(fname)
@@ -323,7 +323,7 @@ def train(args, yml_config):
 
                     if yml_config['finetuning']['verbose_train_loop']:
                         print(f"[Epoch {it + 1}/{epochs} Iter: {step}/{n_iter}] Model: {yml_config['finetuning']['pretrained_model']}, Total Loss: {train_tot_loss} Loss: {np.float32(loss)}" # Batch Acc: {np.float32(acc_all)} "
-                              f"AUC Cumulative: {auc_cum}")
+                              f" AUC Cumulative: {auc_cum}")
                         print(f"Finished iteration:{step} in: " + str(int(elapsed_time_iter)) + " sec")
                     
                     # break if logits explose
@@ -332,9 +332,9 @@ def train(args, yml_config):
                         break
 
                 
-                #epoch_acc_all = (tot_acc_all/n_iter)
-                #epoch_acc_per_class = (tot_acc_per_class / n_iter)
-                #epoch_acc_class_avg = (tot_acc_class_avg / n_iter)
+                epoch_acc_all = (tot_acc_all/n_iter)
+                epoch_acc_per_class = (tot_acc_per_class / n_iter)
+                epoch_acc_class_avg = (tot_acc_class_avg / n_iter)
 
 
                 try:
@@ -347,7 +347,7 @@ def train(args, yml_config):
                     epoch_auc= None
                     epoch_auc_mean= None
 
-                print(f"[Epoch {it + 1}/{epochs} Model: {yml_config['finetuning']['pretrained_model']}, Loss: {train_tot_loss} " #Train Acc: {np.float32(epoch_acc_all)}, Train Acc Avg(class) {np.float32(epoch_acc_class_avg)}"
+                print(f"[Epoch {it + 1}/{epochs} Model: {yml_config['finetuning']['pretrained_model']}, Loss: {train_tot_loss} " 
                       f" Train AUC: {epoch_auc_mean} AOC/Class {epoch_auc},")
                 
                 # Is it time to save the session?
@@ -356,7 +356,6 @@ def train(args, yml_config):
                 current_time_epoch = time.time()
                 elapsed_time_iter = current_time_epoch - start_time_epoch
                 print(f"Finished EPOCH:{it + 1} in: " + str(int(elapsed_time_iter)) + " sec")
-                # print(psutil.virtual_memory())
 
                 # ===================== Write Tensorboard summary ===============================
                 # Execute the summaries defined above
@@ -374,20 +373,14 @@ def train(args, yml_config):
 
             print(f"Training Done")
 
-
-            # This MLFLOW code is now saving training metrics. When the validation accuracy will be completed,
-            # we should save instead the validation/test metrics.
-            # The saving will occured only at the end of the finetuning
             if yml_config['mlflow']:
                 mlflow.log_metric('Total Train Accuracy',epoch_acc_all)
                 mlflow.log_metric('Total Train Accuracy per class', np.mean(epoch_acc_per_class))
                 mlflow.log_metric('Total Train Loss',train_tot_loss)
-
                 if epoch_auc is not None:
                     mlflow.log_metrics(auc_scores)
 
             fname_final = str(directory / f'final.ckpt')
-            #rmtree(str(Path.cwd() / yml_config['finetuning']['finetuned_cp']))
             ckpt_pt = Saver.save(sess=sess,save_path=fname_final)
             print(f"Final Chekpoint Saved in {fname_final}")
             return directory
@@ -476,6 +469,8 @@ if __name__ == "__main__":
     parser.add_argument('--save_hub', action='store_true', default=False,
                         help='yml configuration file')
     parser.add_argument('--output_dir', required=True, help='Folder that contains all the outputs')
+    parser.add_argument('--mlflow_dir', required=False, default=None, help='Path to MlFlow folder')
+    
     args = parser.parse_args()
 
     # Yaml configuration files

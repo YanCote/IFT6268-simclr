@@ -1,9 +1,9 @@
 #!/bin/bash
-#SBATCH --time=0-10:00
-#SBATCH --gres=gpu:2
+#SBATCH --time=0-03:00
+#SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=1
 #SBATCH --account=def-bengioy
-#SBATCH --mem=32G
+#SBATCH --mem=8G
 #SBATCH --output=out_%j.out
 
 
@@ -11,12 +11,14 @@ echo 'Copying and unpacking dataset on local compute node...'
 tar -xf ~/scratch/data/images-224.tar -C $SLURM_TMPDIR
 echo 'Copying Data_Entry_2017.csv ...'
 cp -v ~/scratch/data/Data_Entry_2017.csv $SLURM_TMPDIR
-
+                                          
 
 echo 'List1'
 ls -l -d ~/scratch/*/
 echo 'List2'
 ls -l -d ~/*/
+
+mlflow_dir="/home/${1:-gauthies}/IFT6268-simclr/mlruns "
 
 
 echo 'Starting task !'
@@ -36,10 +38,10 @@ source $SLURM_TMPDIR/env/bin/activate
 echo 'Installing package'
 # pip3 install --no-index --upgrade pip
 pip3 install --no-index pyasn1
-echo -e 'Installing tensorflow_gpu  ******************************\n'
+echo -e 'Installing tensorflow_gpu-hub ******************************\n'
 pip3 install --no-index tensorflow_gpu
 echo -e 'Installing TensorFlow-hub ******************************\n'
-pip3 install --no-index ~/python_packages/tensorflow-hub/tensorflow-hub/tensorflow_hub-0.9.0-py2.py3-none-any.whl
+pip3 install --no-index ~/python_packages/tensorflow-hub/tensorflow_hub-0.9.0-py2.py3-none-any.whl
 pip3 install --no-index tensorboard
 pip3 install --no-index termcolor
 pip3 install --no-index pandas
@@ -63,5 +65,9 @@ pip3 install --no-index ~/python_packages/tensorflow-datasets/zipp-3.4.0-py3-non
 pip3 install --no-index ~/python_packages/tensorflow-datasets/tensorflow_datasets-4.0.1-py3-none-any.whl
 
 echo 'Calling python script'
-stdbuf -oL python -u ./Finetuning/finetuning.py --config ./Finetuning/config.yml --xray_path $SLURM_TMPDIR
-# deactivate
+stdbuf -oL python -u ./Finetuning/finetuning.py \
+--config ./Finetuning/configchest_big.yml \
+--xray_path $SLURM_TMPDIR \
+--output_dir '/home/gauthies/scratch/build/' \
+--mlflow_dir $mlflow_dir| tee finetuning.txt
+# deactivatels
