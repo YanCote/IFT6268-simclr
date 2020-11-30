@@ -68,7 +68,7 @@ stdbuf -oL nohup python -u ./simclr_master/run.py --data_dir $SLURM_TMPDIR \
 --temperature 0.5 \
 --proj_out_dim 128 \
 --train_epochs 1 \
---checkpoint_epochs 200 \
+--checkpoint_epochs 500 \
 --train_summary_steps 0 \
 --color_jitter_strength 0.5 > run_${dt}.txt 2>&1;
 then
@@ -76,11 +76,11 @@ echo "Time Signature:"$dt
 echo "Saving Monolytic File Archive in : ${out_dir}/run_${dt}.txt"
 cp run_${dt}.txt "${out_dir}/run_${dt}.txt"
 
-cd $pretrain_dir$dt
+cd $pretrain_dir
 echo "PWD"
 echo $PWD
-tar -zcvf --recursive-unlink $dt.tar.gz .
-mv $dt.tar.gz ../
+tar -cvf $dt.tar.gz $dt
+#mv $dt.tar.gz ../
 fi
 echo $dt
 echo 'PreTraining Completed !!! '
