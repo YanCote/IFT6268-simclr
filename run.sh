@@ -22,7 +22,7 @@ cp ~/scratch/data/Data_Entry_2017.csv $SLURM_TMPDIR
 echo ''
 echo 'Starting task !'
 dt=$(date '+%d-%m-%Y-%H-%M-%S');
-echo 'Time Signature: ${dt}'
+echo 'Time Signature: $dt'
 pretrain_dir="/home/${1:-yancote1}/models/pretrain/"
 mkdir -p $pretrain_dir
 out_dir=$pretrain_dir$dt
@@ -64,11 +64,11 @@ stdbuf -oL nohup python -u ./simclr_master/run.py --data_dir $SLURM_TMPDIR \
 --model_dir $out_dir \
 --use_multi_gpus \
 --checkpoint_path $out_dir \
---learning_rate 0.1 \
+--learning_rate 0.5 \
 --use_blur \
 --temperature 0.5 \
 --proj_out_dim 128 \
---train_epochs 10 \
+--train_epochs 1 \
 --checkpoint_epochs 50 \
 --color_jitter_strength 0.5 > run_${dt}.txt  2>&1;
 then
@@ -76,7 +76,9 @@ echo 'Time Signature: $dt'
 echo "Saving Monolytic File Archive in : ${out_dir}/run_${dt}.txt"
 cp run_${dt}.txt "${out_dir}/run_${dt}.txt"
 
-cd $pretrain_dir
-tar -zcvf ${dt}.tar.gz ${dt}
+cd $pretrain_dir/$dt
+echo $PWD
+tar -zcvf $dt.tar.gz .
+cd $dt.tar.gz ../
 fi
 echo 'PreTraining Completed !!! '

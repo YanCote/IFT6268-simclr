@@ -1,5 +1,21 @@
-rsync -zarvu --prune-empty-dirs --include "*/" --include="*.gz" --exclude="*"  ${1:-yancote1}@graham.calculcanada.ca:/home/${1:-yancote1}/models/pretrain/ ./models/pretrain
-rsync -zarvu --prune-empty-dirs --include "*/" --include="*.gz" --exclude="*"  ${1:-yancote1}@cedar.calculcanada.ca:/home/${1:-yancote1}/models/pretrain/ ./models/pretrain
-rsync -zarvu --prune-empty-dirs --include "*/" --include="*.gz" --exclude="*"  ${1:-yancote1}@beluga.calculcanada.ca:/home/${1:-yancote1}/models/pretrain/ ./models/pretrain
+# args1 : cedar beluga or graham: download .tar.gx from the server, if upload, upload all build to graham
+# args2 : user name
 
-#rsync -zarvu --prune-empty-dirs --include "*/" --include="*.gz" --exclude="*" ./models/pretrain/build ${1:-yancote1}@graham.calculcanada.ca:/home/${1:-yancote1}/build
+if [ "$1" = "cedar" ]
+then
+  rsync -zarvu --prune-empty-dirs --include "*/" --include="*.gz" --exclude="*"  ${2:-yancote1}@cedar.calculcanada.ca:/home/${2:-yancote1}/models/pretrain/ ./models/pretrain
+fi
+if [ "$1" = "graham" ]
+then
+  rsync -zarvu --prune-empty-dirs --include "*/" --include="*.gz" --exclude="*"  ${2:-yancote1}@graham.calculcanada.ca:/home/${2:-yancote1}/models/pretrain/ ./models/pretrain
+fi
+if [ "$1" = "beluga" ]
+then
+  rsync -zarvu --prune-empty-dirs --include "*/" --include="*.gz" --exclude="*"  ${2:-yancote1}@beluga.calculcanada.ca:/home/${2:-yancote1}/models/pretrain/ ./models/pretrain
+fi
+if [ "$1" = "upload" ]
+then
+  rsync -zarvu --prune-empty-dirs --include "*/" --include="*.gz" --exclude="*" ./models/pretrain/build ${2:-yancote1}@graham.calculcanada.ca:/home/${2:-yancote1}
+  rsync -zarvu --prune-empty-dirs --include "*/" --include="*.gz" --exclude="*" ./models/pretrain/build ${2:-yancote1}@beluga.calculcanada.ca:/home/${2:-yancote1}
+  rsync -zarvu --prune-empty-dirs --include "*/" --include="*.gz" --exclude="*" ./models/pretrain/build ${2:-yancote1}@cedar.calculcanada.ca:/home/${2:-yancote1}
+fi

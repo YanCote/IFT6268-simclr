@@ -46,9 +46,9 @@ Every Run generate a Monolithic output such as archived and named using datetime
 >In:  XRAY Dataset <br>
 >Out: XRAY PreTrain Monolithic output
 
-*scripts/down_pretrain_models.sh username*: download pretrained models locally
-*scripts/sync_scratch.sh*: Use on Compute Canada to sync home with Scratch
-*scripts/initial_down_whl.sh*: script to download the whl file for packages not available on CC
+*scripts/down_pretrain_models.sh username*: download pretrained models locally  
+*scripts/sync_scratch.sh*: Use on Compute Canada to sync home with Scratch  
+*scripts/initial_down_whl.sh*: script to download the whl file for packages not available on CC  
 
 ## FineTuning and validation
 
