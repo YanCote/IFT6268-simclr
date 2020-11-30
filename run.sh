@@ -62,11 +62,11 @@ stdbuf -oL nohup python -u ./simclr_master/run.py --data_dir $SLURM_TMPDIR \
 --model_dir $out_dir \
 --use_multi_gpus \
 --checkpoint_path $out_dir \
---learning_rate 0.1 \
 --use_blur \
---temperature 0.2 \
---proj_out_dim 128 \
---train_epochs 1 \
+--learning_rate 0.1 \
+--temperature 0.5 \
+--train_epochs 10 \
+--proj_out_dim 256 \
 --checkpoint_epochs 500 \
 --train_summary_steps 50 \
 --color_jitter_strength 0.5 > run_${dt}.txt 2>&1;
