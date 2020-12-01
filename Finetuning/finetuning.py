@@ -434,6 +434,9 @@ def build_hub_module(yml_config, num_classes, hub_id_name, checkpoint_path, save
                           outputs=dict(endpoints, default=logits_t))
 
     spec = hub.create_module_spec(module_fn, tags_and_args)
+    hub_path = str(Path(save_path) / 'hub')
+    if os.path.exists(hub_path):
+        rmtree(hub_path)
     checkpoint_export_dir = os.path.join(save_path, 'hub')
     create_folder(checkpoint_export_dir)
     spec.export(
