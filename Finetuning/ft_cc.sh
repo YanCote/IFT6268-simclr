@@ -22,11 +22,11 @@ mlflow_dir="/home/${1:-gauthies}/IFT6268-simclr/mlruns"
 
 dt=$(date '+%d-%m-%Y-%H-%M-%S');
 echo "Time Signature: ${dt}"
-out_dir_f="/home/${1:-gauthies}/finetuning/"
+out_dir_f="validation_output/"
 mkdir -p $out_dir_f
 out_dir="${out_dir_f}${dt}"
 mkdir -p $out_dir
-
+echo "Using OutDir: : ${out_dir}"
 echo 'Starting task !'
 echo 'Load Modules Python !'
 # module load arch/avx512 StdEnv/2018.3

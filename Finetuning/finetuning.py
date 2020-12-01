@@ -233,14 +233,8 @@ def train(args, yml_config):
         # Limit the precision of floats...
         np.set_printoptions(formatter={'float': '{: 0.3f}'.format})
         with sess.as_default() as scope:
-            if yml_config['mlflow']:                
-                # open pickle file that contains the hyper params of pretuned
-                fname  = os.path.join(yml_config['finetuning']['pretrained_build'], 'experiment_flags.p')
-                with open(fname,'rb') as f:
-                    pretuned_params = pickle.load(f)
-                pretuned_params  = {'P-' + str(key).replace('/', '').replace('?', '').replace('$', ''): val for key, val in pretuned_params.items()}     
-                finetuned_params =  {'F-' + str(key).replace('/', ''): val for key, val in yml_config['finetuning'].items()}                 
-                
+            if yml_config['mlflow']:
+
                 # log params in MLFLOW
                 if args.mlflow_dir is None:
                     mlflow.set_tracking_uri(yml_config['mlflow_path'])
@@ -249,9 +243,26 @@ def train(args, yml_config):
 
                 mlflow.set_experiment('results')
                 mlflow.start_run()
-                mlflow.log_artifact(fname)
+                # open pickle file that contains the hyper params of pretuned
+                fname = os.path.join(yml_config['finetuning']['pretrained_build'], 'experiment_flags.p')
+                if os.path.exists(fname):
+                    with open(fname,'rb') as f:
+                        pretuned_params = pickle.load(f)
+                    pretuned_params  = {'P-' + str(key).replace('/', '').replace('?', '').replace('$', ''): val for key, val in pretuned_params.items()}
+                    mlflow.log_params(pretuned_params)
+
+                # open pickle file that contains the hyper params of pretuned
+                fname = os.path.join(yml_config['finetuning']['pretrained_build'], 'mAP_result.p')
+                if os.path.exists(fname):
+                    fname  = os.path.join(yml_config['finetuning']['pretrained_build'], 'experiment_flags.p')
+                    with open(fname,'rb') as f:
+                        pretuned_metric = pickle.load(f)
+                    mlflow.log_metrics(pretuned_metric)
+
+                finetuned_params =  {'F-' + str(key).replace('/', ''): val for key, val in yml_config['finetuning'].items()}
+
                 mlflow.log_param('TB_Timestamp', current_time)
-                mlflow.log_params(pretuned_params )
+
                 mlflow.log_params(finetuned_params)     
             
             fname = os.path.join(directory, 'finetuning_hyper_params.txt')
@@ -465,7 +476,7 @@ if __name__ == "__main__":
     parser.add_argument('--config', '-c', default='config.yml', required=False,
                     help='yml configuration file')
     parser.add_argument('--xray_path', default='', required=False,
-                        help='yml configuration file')
+                        help='XRAY Data SetPath')
     parser.add_argument('--save_hub', action='store_true', default=False,
                         help='yml configuration file')
     parser.add_argument('--output_dir', required=True, help='Folder that contains all the outputs')
