@@ -52,7 +52,7 @@ flags.DEFINE_string(
     'Directory where dataset is stored.')
 
 flags.DEFINE_boolean(
-    'use_multi_gpus', False,
+    'use_multi_gpus', True,
     'Is there multiple GPUs on the compute node')
 
 flags.DEFINE_float(

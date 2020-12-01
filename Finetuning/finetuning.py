@@ -254,7 +254,6 @@ def train(args, yml_config):
                 # open pickle file that contains the hyper params of pretuned
                 fname = os.path.join(yml_config['finetuning']['pretrained_build'], 'mAP_result.p')
                 if os.path.exists(fname):
-                    fname  = os.path.join(yml_config['finetuning']['pretrained_build'], 'experiment_flags.p')
                     with open(fname,'rb') as f:
                         pretuned_metric = pickle.load(f)
                     mlflow.log_metrics(pretuned_metric)
