@@ -25,7 +25,8 @@ cp ~/scratch/data/Data_Entry_2017.csv $SLURM_TMPDIR
 
 echo ''
 echo 'Starting task !'
-dt=$(date '+%d-%m-%Y-%H-%M-%S');
+#dt=$(date '+%d-%m-%Y-%H-%M-%S');
+dt=$(date '+%d-%m-%Y-%H-%M-%S-%3N');
 echo 'Time Signature: $dt'
 echo $dt
 pretrain_dir="/home/${1:-yancote1}/models/pretrain/"
