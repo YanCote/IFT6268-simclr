@@ -1,7 +1,7 @@
 device_type             : ['/cpu:0', '/gpu:0']
 data_src                : 'chest_xray'
 tensorboard             : True
-mlflow_path             :  /home/gauthies/IFT6268-simclr/mlruns   #/Users/shanelgauthier/Documents/UDEM/Self-Supervised Learning/mlruns
+mlflow_path             :  /home/yancote1/IFT6268-simclr/mlruns   #/home/gauthies/IFT6268-simclr/mlruns
 mlflow                  : True
 imagenet_lemma_path     : ./Finetuning/ilsvrc2012_wordnet_lemmas.txt
 
@@ -12,7 +12,6 @@ enum:
 dataset:
     flower_ts_data_path : "./"
     chest_xray : $SLURM_TMPDIR
-#    chest_xray : $SLURM_TMPDIR #"/Users/shanelgauthier/Documents/UDEM/Self-Supervised Learning/NIH/"#$SLURM_TMPDIR
 
 finetuning:
     epochs                  : 4
@@ -24,12 +23,11 @@ finetuning:
     buffer_size             : 256
     epoch_save_step         : 2                        # Save checkpoints every n epochs
     train_data_ratio        : 0.4                       # Portion of the Data to use
-    train_resnet            : True                     # trainable flag for the resnet model
+    train_resnet            : False                     # trainable flag for the resnet model
     verbose_train_loop      : False
-    pos_weight_loss         : 10
-    pretrained_build     :  '/home/yancote1/models/pretrain/xray/12-11-2020-20-17-01'
+    eval_data_ratio         : 1.0
+    pretrained_build        :  '/home/yancote1/models/pretrain/28-11-2020-08-34-05'
     pretrained_model        : 'ChestXRay' # ChestXRay or 'ImageNetSSl'
-    #load_ckpt              : '''
     
 
 
@@ -45,5 +43,4 @@ distillation:
     momentum                : 0.9
     weight_decay            : 1e-4
     temperature             : 1
-    #    hub_path                 : '../google_models/finetuned_1pct/r50_1x_sk0/hub/'
     hub_path                : './r50_1x_sk0/hub/'

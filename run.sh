@@ -12,6 +12,12 @@
 #CEDAR= --gres=gpul:v100:4 -> mem=178G or 250G || gres=gpul:p100l:4 ->  mem=120G
 #GRAHAM --gres=gpu:v100:8 -> mem=178G or 377G  || gres=gpul:p100:2 ->  mem=120G
 #BELUGA --gres=gpu:v100:4 -> mem=186G
+format_time() {
+  ((h=${1}/3600))
+  ((m=(${1}%3600)/60))
+  ((s=${1}%60))
+  printf "%02d:%02d:%02d\n" $h $m $s
+ }
 
 echo 'Copying and unpacking dataset on local compute node...'
 tar -xf ~/scratch/data/images-224.tar -C $SLURM_TMPDIR
@@ -82,4 +88,5 @@ tar -cvf $dt.tar.gz $dt
 
 fi
 echo $dt
+echo "Script completed in $(format_time $SECONDS)"
 echo 'PreTraining Completed !!! '

@@ -6,6 +6,12 @@
 #SBATCH --mem=32G
 #SBATCH --output=out_%j.out
 
+format_time() {
+  ((h=${1}/3600))
+  ((m=(${1}%3600)/60))
+  ((s=${1}%60))
+  printf "%02d:%02d:%02d\n" $h $m $s
+ }
 
 echo 'Copying and unpacking dataset on local compute node...'
 tar -xf ~/scratch/data/images-224.tar -C $SLURM_TMPDIR
@@ -75,9 +81,11 @@ stdbuf -oL python -u ./Finetuning/finetuning.py \
 --config ./Finetuning/config.yml \
 --xray_path $SLURM_TMPDIR \
 --output_dir $out_dir \
---mlflow_dir $mlflow_dir| tee finetuning_${dt}.txt
+--mlflow_dir $mlflow_dir| > finetuning_${dt}.txt 2>&1
+#--mlflow_dir $mlflow_dir| tee finetuning_${dt}.txt
 
 echo "Time Signature: ${dt}"
 echo "Saving Monolytic File Archive in : ${out_dir}/finetuning${dt}.txt"
+echo "Script completed in $(format_time $SECONDS)"
 mv finetuning_${dt}.txt "${out_dir}/finetuning_${dt}.txt"
 

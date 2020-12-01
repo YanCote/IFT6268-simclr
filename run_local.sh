@@ -33,4 +33,5 @@ tar -cvf $dt.tar.gz $dt
 #mv $dt.tar.gz ../
 fi
 echo $dt
+echo "Script completed in $(format_time $SECONDS)"
 echo 'PreTraining Completed !!! '
