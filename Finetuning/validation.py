@@ -34,6 +34,8 @@ def evaluation(yml_config, args, module_path=None):
         data_path = args.xray_path
     test_dataset, tfds_info = chest_xray.XRayDataSet(data_path, config=None, train=False)
     num_images = tfds_info['num_eval_examples']
+    num_images = np.floor(yml_config['finetuning']['eval_data_ratio'] * tfds_info['num_eval_examples'])
+    assert yml_config['finetuning']['eval_data_ratio']
     num_classes = tfds_info['num_classes']
     batch_size = yml_config['inference']['batch']
 
@@ -103,7 +105,7 @@ def evaluation(yml_config, args, module_path=None):
 
 
         print(f"Validation Done! Model: {yml_config['finetuning']['pretrained_model']}, Total Loss: {val_tot_loss}, Mean Loss: {val_tot_loss_mean},"
-                f" Train AUC: {epoch_auc_mean} AOC/Class {epoch_auc},")
+                f" Validation AUC: {epoch_auc_mean} AOC/Class {epoch_auc},")
     
 
 if __name__ == "__main__":

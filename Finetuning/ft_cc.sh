@@ -1,32 +1,40 @@
 #!/bin/bash
-#SBATCH --time=0-10:00
+#SBATCH --time=01:00:00
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=1
 #SBATCH --account=def-bengioy
 #SBATCH --mem=32G
 #SBATCH --output=out_%j.out
 
+format_time() {
+  ((h=${1}/3600))
+  ((m=(${1}%3600)/60))
+  ((s=${1}%60))
+  printf "%02d:%02d:%02d\n" $h $m $s
+ }
 
 echo 'Copying and unpacking dataset on local compute node...'
 tar -xf ~/scratch/data/images-224.tar -C $SLURM_TMPDIR
 echo 'Copying Data_Entry_2017.csv ...'
 cp -v ~/scratch/data/Data_Entry_2017.csv $SLURM_TMPDIR
-                                          
+
 
 echo 'List1'
 ls -l -d ~/scratch/*/
 echo 'List2'
 ls -l -d ~/*/
 
-mlflow_dir="/home/${1:-gauthies}/IFT6268-simclr/mlruns"
 
-dt=$(date '+%d-%m-%Y-%H-%M-%S');
+
+#dt=$(date '+%d-%m-%Y-%H-%M-%S');
+dt=$(date '+%d-%m-%Y-%H-%M-%S-%3N');
 echo "Time Signature: ${dt}"
+mlflow_dir="/home/${1:-gauthies}/finetuning/mlruns"
 out_dir_f="/home/${1:-gauthies}/finetuning/"
 mkdir -p $out_dir_f
 out_dir="${out_dir_f}${dt}"
 mkdir -p $out_dir
-
+echo "Using OutDir: : ${out_dir}"
 echo 'Starting task !'
 echo 'Load Modules Python !'
 # module load arch/avx512 StdEnv/2018.3
@@ -66,18 +74,22 @@ pip3 install --no-index ~/python_packages/tensorflow-metadata/absl_py-0.10.0-py3
 pip3 install --no-index ~/python_packages/tensorflow-datasets/promise-2.3
 echo -e 'Installing tensorflow_metadata ******************************\n'
 pip3 install --no-index ~/python_packages/tensorflow-metadata/tensorflow_metadata-0.24.0-py3-none-any.whl
+pip3 install --no-index ~/python_packages/tensorflow-metadata/tensorflow_metadata-0.25.0-py3-none-any.whl
 echo -e 'Installing tensorflow_datasets ******************************\n'
 pip3 install --no-index ~/python_packages/tensorflow-datasets/zipp-3.4.0-py3-none-any.whl
-pip3 install --no-index ~/python_packages/tensorflow-datasets/tensorflow_datasets-4.0.1-py3-none-any.whl
+#pip3 install --no-index ~/python_packages/tensorflow-datasets/tensorflow_datasets-4.0.1-py3-none-any.whl
 
 echo 'Calling python script'
 stdbuf -oL python -u ./Finetuning/finetuning.py \
 --config ./Finetuning/config.yml \
 --xray_path $SLURM_TMPDIR \
 --output_dir $out_dir \
---mlflow_dir $mlflow_dir| tee finetuning_${dt}.txt
+--mlflow_dir $mlflow_dir > finetuning_${dt}.txt 2>&1
+#--mlflow_dir $mlflow_dir| tee finetuning_${dt}.txt
 
 echo "Time Signature: ${dt}"
 echo "Saving Monolytic File Archive in : ${out_dir}/finetuning${dt}.txt"
+echo "Script completed in $(format_time $SECONDS)"
+mv finetuning_${dt}.txt "${out_dir}/finetuning_${dt}.txt"
 mv finetuning_${dt}.txt "${out_dir}/finetuning_${dt}.txt"
 

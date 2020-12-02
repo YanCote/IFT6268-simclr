@@ -52,7 +52,7 @@ flags.DEFINE_string(
     'Directory where dataset is stored.')
 
 flags.DEFINE_boolean(
-    'use_multi_gpus', False,
+    'use_multi_gpus', True,
     'Is there multiple GPUs on the compute node')
 
 flags.DEFINE_float(
@@ -326,12 +326,12 @@ def build_hub_module(model, num_classes, global_step, checkpoint_path):
     drop_collections = ['trainable_variables_inblock_%d' % d for d in range(6)]
     spec = hub.create_module_spec(module_fn, tags_and_args, drop_collections)
     hub_export_dir = os.path.join(FLAGS.model_dir, 'hub')
-    checkpoint_export_dir = os.path.join(hub_export_dir, str(global_step))
-    if tf.io.gfile.exists(checkpoint_export_dir):
+    #checkpoint_export_dir = os.path.join(hub_export_dir, str(global_step))
+    if tf.io.gfile.exists(hub_export_dir):
         # Do not save if checkpoint already saved.
-        tf.io.gfile.rmtree(checkpoint_export_dir)
+        tf.io.gfile.rmtree(hub_export_dir)
     spec.export(
-        checkpoint_export_dir,
+        hub_export_dir,
         checkpoint_path=checkpoint_path,
         name_transform_fn=None)
 
@@ -572,8 +572,8 @@ def compute_ssl_metric():
     Path(output).mkdir(parents=True, exist_ok=True)
     file_name = os.path.join(output, 'outputs_{}.pickle'.format("test"))
     print("Saving outputs in: {}".format(file_name))
-    with open(file_name, 'wb') as handle:
-        pickle.dump(features, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    # with open(file_name, 'wb') as handle:
+    #     pickle.dump(features, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     # Calculate mAP
     print("Calculating mAPs...")
@@ -588,6 +588,10 @@ def compute_ssl_metric():
         "P_mAP_quant_80p": quantiles[0][2]
     }
     pickle.dump(mAP_dict, open(os.path.join(FLAGS.checkpoint_path, 'mAP_result.p'), "wb"))
+    print("mAP: {}, var: {}, quantiles 0.2: {}, median: {}, 0.8: {}".format(
+            mAPs[0][0], mAPs[0][1], quantiles[0][0], quantiles[0][1], quantiles[0][2]), \
+        file=open(os.path.join(FLAGS.checkpoint_path, 'mAP_result.txt'), 'w'))
+
     if mAPs is not None:
         print("\nResults:")
         print("mAP: {}, var: {}, quantiles 0.2: {}, median: {}, 0.8: {}".format(
@@ -611,10 +615,10 @@ def create_module_from_checkpoints(args):
     print('Hub Module Created')
 
     # Copy hyper-param file 
-    if os.path.exists(os.path.join(FLAGS.checkpoint_path, "experiment_flags.txt")):
-        from shutil import copyfile
-        copyfile(os.path.join(FLAGS.checkpoint_path, "experiment_flags.txt"), 
-                os.path.join(hub_export_dir, hub_name, "hyper-parameters.txt"))
+    # if os.path.exists(os.path.join(FLAGS.checkpoint_path, "experiment_flags.txt")):
+    #     from shutil import copyfile
+    #     copyfile(os.path.join(FLAGS.checkpoint_path, "experiment_flags.txt"),
+    #             os.path.join(hub_export_dir, hub_name, "hyper-parameters.txt"))
     # sys.exit(0)
     
 
