@@ -91,4 +91,5 @@ echo "Time Signature: ${dt}"
 echo "Saving Monolytic File Archive in : ${out_dir}/finetuning${dt}.txt"
 echo "Script completed in $(format_time $SECONDS)"
 mv finetuning_${dt}.txt "${out_dir}/finetuning_${dt}.txt"
+mv finetuning_${dt}.txt "${out_dir}/finetuning_${dt}.txt"
 

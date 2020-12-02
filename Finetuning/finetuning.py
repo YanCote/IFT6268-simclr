@@ -225,6 +225,7 @@ def train(args, yml_config):
             [tf_tot_acc_all_summary, tf_tot_acc_class_avg_summary, tf_train_tot_loss_summary, tf_tot_auc_ph_summary])
 
         hyper_param = []
+        print(f"yml_config[pretrained_build]= {yml_config['finetuning']['pretrained_build']} ")
         for item in yml_config['finetuning']:
             hyper_param.append(tf1.summary.text(str(item), tf.constant(str(yml_config['finetuning'][item])),'HyperParam'))
 

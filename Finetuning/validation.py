@@ -105,7 +105,7 @@ def evaluation(yml_config, args, module_path=None):
 
 
         print(f"Validation Done! Model: {yml_config['finetuning']['pretrained_model']}, Total Loss: {val_tot_loss}, Mean Loss: {val_tot_loss_mean},"
-                f" Train AUC: {epoch_auc_mean} AOC/Class {epoch_auc},")
+                f" Validation AUC: {epoch_auc_mean} AOC/Class {epoch_auc},")
     
 
 if __name__ == "__main__":
