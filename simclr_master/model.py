@@ -125,7 +125,7 @@ def build_model_fn(model, num_classes, num_train_examples, batch_size):
                 # TODO(iamtingchen): remove this control_dependencies in the future.
                 with tf.control_dependencies([summary_writer.init()]):
                     with summary_writer.as_default():
-                        should_record = tf.math.equal(
+                        should_record = tf.math.equal(The
                             tf.math.floormod(tf.train.get_global_step(),
                                             FLAGS.train_summary_steps), 0)
                         with tf2.summary.record_if(should_record):

@@ -26,7 +26,7 @@ finetuning:
     train_resnet            : False                     # trainable flag for the resnet model
     verbose_train_loop      : False
     eval_data_ratio         : 1.0
-    pretrained_build        :  '/home/yancote1/models/pretrain/12-11-2020-20-17-01'
+    # pretrained_build        :  '/home/yancote1/models/pretrain/12-11-2020-20-17-01'
     # pretrained_build        :  '/home/yancote1/models/pretrain/27-11-2020-13-29-06'
     # pretrained_build        :  '/home/yancote1/models/pretrain/28-11-2020-07-58-16'
     # pretrained_build        :  '/home/yancote1/models/pretrain/28-11-2020-08-33-04'
@@ -37,8 +37,12 @@ finetuning:
     # pretrained_build        :  '/home/yancote1/models/pretrain/28-11-2020-07-53-14'
     # pretrained_build        :  '/home/yancote1/models/pretrain/30-11-2020-10-32-52'
     # pretrained_build        :  '/home/yancote1/models/pretrain/30-11-2020-10-08-27'
+    # pretrained_build        :  '/home/yancote1/models/pretrain/09-12-2020-20-38-01-836'
+    # pretrained_build        :  '/home/yancote1/models/pretrain/06-12-2020-02-35-08-745'
+    # pretrained_build        :  '/home/yancote1/models/pretrain/11-12-2020-02-20-35-052'
+    pretrained_build        :  '/home/yancote1/models/pretrain/09-12-2020-20-41-39-466'
     pretrained_model        : 'ChestXRay' # ChestXRay or 'ImageNetSSl'
-    
+
 
 
 inference:
